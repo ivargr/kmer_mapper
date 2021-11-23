@@ -1,10 +1,10 @@
 import logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 import numpy as np
 import sys
 import argparse
 from graph_kmer_index import KmerIndex
-from kmer_mapper.mapping import get_kmers_from_fasta
+from kmer_mapper.mapping import get_kmers_from_fasta, map_fasta
 from kmer_mapper.mapper import map_kmers_to_graph_index
 import time
 
@@ -17,20 +17,8 @@ def test(args):
     print("Hi")
 
 
-def map_fasta(args):
-    index = KmerIndex.from_file(args.kmer_index)
-    n_nodes = index.max_node_id()
-    start_time = time.time()
-    logging.info("N nodes: %d" % n_nodes)
-    kmers = get_kmers_from_fasta(args.fasta_file, k=args.kmer_size,
-                                 max_read_length=args.max_read_length,
-                                 chunk_size=args.chunk_size,
-                                 return_only_kmers=True)
-    node_counts = map_kmers_to_graph_index(index, n_nodes+1, kmers, 1000)
-    np.save(args.output_file, node_counts)
-    logging.info("Saved node counts to %s.npy" % args.output_file)
-    logging.info("Spent %.3f sec in total mapping kmers" % (time.time()-start_time))
-
+def map_fasta_command(args):
+    map_fasta(args.kmer_index, args.fasta_file, args.chunk_size, args.n_threads, args.max_read_length, args.k)
 
 def run_argument_parser(args):
 

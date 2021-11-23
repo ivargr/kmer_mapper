@@ -6,6 +6,8 @@ import logging
 import time
 from kmer_mapper import util
 cimport cython
+import SharedArray as sa
+from graph_kmer_index.shared_mem import to_shared_memory, SingleSharedArray
 
 def py_read_file(filename):
     with open(filename, "r") as f:
@@ -85,7 +87,7 @@ cdef void process_line(char* sequence, np.uint64_t[:] chunk_row, np.uint8_t[:] m
         mask_row[i] = True
 
 
-def read_fasta_into_chunks(filename, chunk_size=1000, int max_read_length=150):
+def read_fasta_into_chunks(filename, chunk_size=1000, int max_read_length=150, write_to_shared_memory=False, process_reads=False):
     filename_byte_string = filename.encode("UTF-8")
     cdef char * fname = filename_byte_string
 
@@ -99,8 +101,18 @@ def read_fasta_into_chunks(filename, chunk_size=1000, int max_read_length=150):
     cdef ssize_t read
     cdef i = 0
     cdef int line_length = 0
-    chunk = np.zeros((chunk_size, max_read_length), dtype=np.uint64)
-    mask = np.zeros((chunk_size, max_read_length), dtype=np.bool)  # True where reads have bases (for handling short reads)
+
+    if process_reads:
+        chunk = np.zeros((chunk_size, max_read_length), dtype=np.uint64)
+    else:
+        #chunk = np.zeros((chunk_size, max_read_length), dtype=np.uint64)
+        chunk = np.empty(chunk_size, dtype="|S" + str(max_read_length))  # max_read_length bytes for each element
+        #chunk = np.empty(chunk_size, dtype="<U" + str(max_read_length))
+
+    mask = np.zeros((chunk_size, max_read_length),
+                        dtype=np.bool)  # True where reads have bases (for handling short reads)
+
+    prev_time = time.time()
 
     while True:
         read = getline(&line, &l, cfile)
@@ -112,16 +124,45 @@ def read_fasta_into_chunks(filename, chunk_size=1000, int max_read_length=150):
 
         line_length = len(line)-1
         #chunk[i,line_length] = line
-        process_line(line, chunk[i,:], mask[i,:])
+        if process_reads:
+            chunk[i, 0:line_length] = np.frombuffer(line, dtype=np.uint8)[:-1]  # remove \n at end
+            mask[i, 0:line_length] = True
+            # a bit slower:
+            #process_line(line, chunk[i,:], mask[i,:])
+        else:
+            chunk[i] = line
+            mask[i, 0:line_length] = True
+
 
         i += 1
         if i >= chunk_size:
-            yield chunk, mask
+            if write_to_shared_memory:
+                name1 = "shared_array_" + str(np.random.random())
+                name2 = "shared_array_" + str(np.random.random())
+                to_shared_memory(SingleSharedArray(chunk), name1)
+                to_shared_memory(SingleSharedArray(mask), name2)
+                yield name1, name2
+            else:
+                yield chunk, mask
+            logging.info("Took %.3f sec to read %d reads into matrices" % (time.time()-prev_time, chunk_size))
+            prev_time = time.time()
+
             i = 0
-            chunk = np.zeros((chunk_size, max_read_length), dtype=np.uin64)
+            if process_reads:
+                chunk = np.zeros((chunk_size, max_read_length), dtype=np.uint64)
+            else:
+                chunk = np.empty(chunk_size, dtype="|S" + str(max_read_length))
+
             mask = np.zeros((chunk_size, max_read_length), dtype=np.bool)  # True where reads have bases (for handling short reads)
 
-    yield chunk[0:i], mask[0:i]
+    if write_to_shared_memory:
+        name1 = "shared_array_" + str(np.random.random())
+        name2 = "shared_array_" + str(np.random.random())
+        to_shared_memory(SingleSharedArray(chunk[0:i]), name1)
+        to_shared_memory(SingleSharedArray(mask[0:i]), name2)
+        yield name1, name2
+    else:
+        yield chunk[0:i], mask[0:i]
 
     fclose(cfile)
 
@@ -186,20 +227,20 @@ def map_kmers_to_graph_index(index, int max_node_id, np.uint64_t[:] kmers, int m
     cdef int l, j, i
     cdef long hash
     cdef int modulo = index._modulo
-    logging.info("Hash modulo is %d. Max index lookup frequency is %d." % (modulo, max_index_lookup_frequency))
+    #logging.info("Hash modulo is %d. Max index lookup frequency is %d." % (modulo, max_index_lookup_frequency))
 
     cdef np.ndarray[np.float_t] node_counts = np.zeros(max_node_id+1, dtype=np.float)
     #cdef np.float_t[:] node_counts = np.zeros(max_node_id+1, dtype=np.float)
 
     t = time.time()
     cdef np.uint64_t[:] kmer_hashes = np.mod(kmers, modulo)
-    logging.info("Time spent taking modulo: %.4f" % (time.time()-t))
+    #logging.info("Time spent taking modulo: %.4f" % (time.time()-t))
     t = time.time()
     cdef int n_collisions = 0
     cdef int n_kmers_mapped = 0
     cdef int n_skipped_high_frequency = 0
     cdef int n_no_index_hits = 0
-    logging.info("Will process %d kmers" % kmers.shape[0])
+    #logging.info("Will process %d kmers" % kmers.shape[0])
     for i in range(kmers.shape[0]):
         hash = kmer_hashes[i]
 
@@ -226,10 +267,10 @@ def map_kmers_to_graph_index(index, int max_node_id, np.uint64_t[:] kmers, int m
             n_kmers_mapped += 1
 
     logging.info("Time spent looking up kmers in index: %.3f" % (time.time()-t))
-    logging.info("N kmers with no index hits: %d" % n_no_index_hits)
-    logging.info("N hash collisions: %d" % n_collisions)
-    logging.info("N skipped because too high frequency: %d" % n_skipped_high_frequency)
-    logging.info("N kmers mapped: %d" % n_kmers_mapped)
+    #logging.info("N kmers with no index hits: %d" % n_no_index_hits)
+    #logging.info("N hash collisions: %d" % n_collisions)
+    #logging.info("N skipped because too high frequency: %d" % n_skipped_high_frequency)
+    #logging.info("N kmers mapped: %d" % n_kmers_mapped)
     return node_counts
 
 
