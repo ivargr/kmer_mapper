@@ -117,7 +117,7 @@ def map_fasta_single_thread(data):
 
     index = from_shared_memory(KmerIndex, "kmer_index"+args.random_id)
     kmers = get_kmers_from_read_matrix(read_matrix, mask, args.kmer_size, True)
-    node_counts = map_kmers_to_graph_index(index, args.n_nodes, kmers, 1000)
+    node_counts = map_kmers_to_graph_index(index, args.n_nodes, kmers, args.max_hits_per_kmer)
     shared_counts += node_counts
     #shared_memory_name = "node_counts"+str(np.random.randint(0,10e15))
     #to_shared_memory(SingleSharedArray(node_counts), shared_memory_name)
