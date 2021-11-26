@@ -22,7 +22,7 @@ setup(name='kmer_mapper',
       license='MIT',
       packages=["kmer_mapper"],
       zip_safe=False,
-      install_requires=['numpy', 'cython'],
+      install_requires=['numpy', 'cython', 'graph_kmer_index'],
       classifiers=[
             'Programming Language :: Python :: 3'
       ],
