@@ -30,14 +30,15 @@ def run_argument_parser(args):
 
     subparsers = parser.add_subparsers()
     subparser = subparsers.add_parser("map")
-    subparser.add_argument("-i", "--kmer-index")
-    subparser.add_argument("-f", "--fasta-file")
+    subparser.add_argument("-i", "--kmer-index", required=True)
+    subparser.add_argument("-f", "--fasta-file", required=True)
     subparser.add_argument("-k", "--kmer-size", required=False, default=31, type=int)
     subparser.add_argument("-t", "--n-threads", required=False, default=16, type=int)
     subparser.add_argument("-c", "--chunk-size", required=False, type=int, default=500000, help="N reads to process in each chunk")
     subparser.add_argument("-l", "--max-read-length", required=False, type=int, default=150,
                            help="Maximum length of reads. Reads should not be longer than this.")
-    subparser.add_argument("-o", "--output-file")
+    subparser.add_argument("-o", "--output-file", required=True)
+    subparser.add_argument("-r", "--ignore-reverse-complement", required=False, default=False, type=bool)
     subparser.add_argument("-I", "--max-hits-per-kmer", required=False, default=1000, type=int,
                            help="Ignore kmers that have more than this amount of hits in index")
     subparser.set_defaults(func=map_fasta)

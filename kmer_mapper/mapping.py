@@ -64,7 +64,7 @@ def get_unique_kmers_and_counts(hash_matrix):
     return unique.keys(), unique.values
 
 
-def get_kmers_from_read_matrix(read_matrix, mask, k=31, return_only_kmers=False):
+def get_kmers_from_read_matrix(read_matrix, mask, k=31, return_only_kmers=False, include_reverse_complement=True):
     logging.info("k=%d" % k)
     t = time.time()
     numeric_reads = convert_read_matrix_to_numeric(read_matrix)
@@ -74,11 +74,16 @@ def get_kmers_from_read_matrix(read_matrix, mask, k=31, return_only_kmers=False)
 
     mask = mask[:,k-1:]  # make mask for hashes (we don't want hashes for bases not from reads, which are False in original mask)
     hashes = get_kmer_hashes_numpy(numeric_reads, k=k)[mask]
-    hashes_complement = get_kmer_hashes_numpy(numeric_reads_complement, is_complement=True, k=k)[mask]
+    if include_reverse_complement:
+        hashes_complement = get_kmer_hashes_numpy(numeric_reads_complement, is_complement=True, k=k)[mask]
     logging.info("Time to get kmer hashes: %.3f" % (time.time()-t))
     t = time.time()
 
-    all_hashes = np.concatenate([hashes, hashes_complement])
+    if include_reverse_complement:
+        all_hashes = np.concatenate([hashes, hashes_complement])
+    else:
+        all_hashes = hashes  # np.concatenate([hashes, hashes_complement])
+
     logging.info("N hashes in total: %d" % len(all_hashes))
     logging.info("Time to concatenate hashes and complement hashes: %.3f" % (time.time()-t))
     t = time.time()
@@ -116,7 +121,7 @@ def map_fasta_single_thread(data):
     shared_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
 
     index = from_shared_memory(KmerIndex, "kmer_index"+args.random_id)
-    kmers = get_kmers_from_read_matrix(read_matrix, mask, args.kmer_size, True)
+    kmers = get_kmers_from_read_matrix(read_matrix, mask, args.kmer_size, True, not args.ignore_reverse_complement)
     node_counts = map_kmers_to_graph_index(index, args.n_nodes, kmers, args.max_hits_per_kmer)
     shared_counts += node_counts
     #shared_memory_name = "node_counts"+str(np.random.randint(0,10e15))

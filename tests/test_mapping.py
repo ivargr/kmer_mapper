@@ -77,7 +77,7 @@ def test_map_to_index():
     end = time.time()
     print("Total time: %.4f" % (end-start))
 
-test_get_kmers_from_fasta()
+#test_get_kmers_from_fasta()
 #test_get_kmers_from_fasta()
 #test_map_to_index()
 #test_map_to_kmer_index()
