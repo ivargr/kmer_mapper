@@ -1,7 +1,7 @@
 import logging
 import time
 import numpy as np
-from kmer_mapper.mapper import read_fasta_into_chunks, map_kmers_to_graph_index
+from mapper import read_fasta_into_chunks, map_kmers_to_graph_index
 from kmer_mapper.util import remap_array, remap_array2
 from scipy.ndimage import convolve1d
 import pandas as pd
@@ -55,7 +55,13 @@ def get_kmer_hashes_numpy(numeric_read_matrix, is_complement=False, k=31):
     # convolved outside beginning. Reshape back to matrix and remove last k-1 columns which are overlaps between rows
     function = np.convolve
     #function = scipy.signal.convolve
-    return function(numeric_read_matrix.flatten(), power_array, mode="full")[k-1:].reshape(numeric_read_matrix.shape)[:,:-(k-1)]
+    flat_numeric_read_matrix = numeric_read_matrix.flatten()
+    if len(flat_numeric_read_matrix) == 0:
+        logging.warning("Read matrix is empty")
+        raise Exception("No reads")
+        return np.zeros_like(numeric_read_matrix)
+
+    return function(flat_numeric_read_matrix, power_array, mode="full")[k-1:].reshape(numeric_read_matrix.shape)[:,:-(k-1)]
 
 
 def get_unique_kmers_and_counts(hash_matrix):
@@ -111,11 +117,16 @@ def map_fasta_single_thread(data):
     reads, args = data
     read_matrix, mask = reads
     if isinstance(read_matrix, str):
+        logging.info("Reading reads from shared memory %s" % read_matrix)
         read_matrix = from_shared_memory(SingleSharedArray, read_matrix).array
         mask = from_shared_memory(SingleSharedArray, mask).array
 
     t = time.time()
     read_matrix = convert_byte_read_array_to_int_array(read_matrix, args.max_read_length).astype(np.uint64)
+    if read_matrix.shape[0] == 0:
+        logging.warning("There are 0 reads in read matrix")
+        return
+
     logging.info("Spent %.5f sec to convert byte read array to int read matrix " % (time.time()-t))
 
     shared_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
@@ -132,6 +143,7 @@ def map_fasta_single_thread(data):
 
 
 def map_fasta(args):
+    logging.info("Mapping fasta to kmer index %s ..." % args.kmer_index)
     index = KmerIndex.from_file(args.kmer_index)
     args.random_id = str(np.random.random())
     to_shared_memory(index, "kmer_index"+args.random_id)
@@ -145,6 +157,7 @@ def map_fasta(args):
     to_shared_memory(SingleSharedArray(node_counts), "counts_shared" + args.random_id)
 
     reads = read_fasta_into_chunks(args.fasta_file, args.chunk_size, args.max_read_length, write_to_shared_memory=True, process_reads=False)
+
     logging.info("Got reads, starting processes")
     for result in pool.imap(map_fasta_single_thread, zip(reads, repeat(args))):
         continue

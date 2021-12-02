@@ -88,6 +88,7 @@ cdef void process_line(char* sequence, np.uint64_t[:] chunk_row, np.uint8_t[:] m
 
 
 def read_fasta_into_chunks(filename, chunk_size=1000, int max_read_length=150, write_to_shared_memory=False, process_reads=False):
+    logging.info("Reading fasta %s" % filename)
     filename_byte_string = filename.encode("UTF-8")
     cdef char * fname = filename_byte_string
 
@@ -116,7 +117,9 @@ def read_fasta_into_chunks(filename, chunk_size=1000, int max_read_length=150, w
 
     while True:
         read = getline(&line, &l, cfile)
-        if read == -1: break
+        if read == -1:
+            logging.info("No more reads")
+            break
 
         # skip header lines
         if line[0] == 62:
@@ -133,19 +136,21 @@ def read_fasta_into_chunks(filename, chunk_size=1000, int max_read_length=150, w
             chunk[i] = line
             mask[i, 0:line_length] = True
 
-
         i += 1
         if i >= chunk_size:
             if write_to_shared_memory:
                 name1 = "shared_array_" + str(np.random.random())
                 name2 = "shared_array_" + str(np.random.random())
+                logging.info("Yielding chunk with %d reads in shared memory %s" % (chunk.shape[0], name1))
                 to_shared_memory(SingleSharedArray(chunk), name1)
                 to_shared_memory(SingleSharedArray(mask), name2)
                 yield name1, name2
             else:
+                logging.info("Yielding %d reads directly" % (len(chunk)))
                 yield chunk, mask
-            logging.info("Took %.3f sec to read %d reads into matrices" % (time.time()-prev_time, chunk_size))
+            logging.info("Took %.3f sec to read %d reads into matrix" % (time.time()-prev_time, chunk_size))
             prev_time = time.time()
+
 
             i = 0
             if process_reads:
@@ -155,14 +160,16 @@ def read_fasta_into_chunks(filename, chunk_size=1000, int max_read_length=150, w
 
             mask = np.zeros((chunk_size, max_read_length), dtype=np.bool)  # True where reads have bases (for handling short reads)
 
-    if write_to_shared_memory:
-        name1 = "shared_array_" + str(np.random.random())
-        name2 = "shared_array_" + str(np.random.random())
-        to_shared_memory(SingleSharedArray(chunk[0:i]), name1)
-        to_shared_memory(SingleSharedArray(mask[0:i]), name2)
-        yield name1, name2
-    else:
-        yield chunk[0:i], mask[0:i]
+    if i > 0:
+        logging.info("Yielding %d reads in the end" % i)
+        if write_to_shared_memory:
+            name1 = "shared_array_" + str(np.random.random())
+            name2 = "shared_array_" + str(np.random.random())
+            to_shared_memory(SingleSharedArray(chunk[0:i]), name1)
+            to_shared_memory(SingleSharedArray(mask[0:i]), name2)
+            yield name1, name2
+        else:
+            yield chunk[0:i], mask[0:i]
 
     fclose(cfile)
 

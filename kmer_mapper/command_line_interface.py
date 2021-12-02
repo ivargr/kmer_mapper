@@ -4,8 +4,8 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s %
 import numpy as np
 import argparse
 from graph_kmer_index import KmerIndex
-from kmer_mapper.mapping import get_kmers_from_fasta, map_fasta
-from kmer_mapper.mapper import map_kmers_to_graph_index
+from .mapping import get_kmers_from_fasta, map_fasta
+from mapper import map_kmers_to_graph_index
 import time
 
 

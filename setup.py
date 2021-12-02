@@ -5,6 +5,7 @@ from distutils.extension import Extension
 from Cython.Distutils import build_ext
 import numpy as np
 
+"""
 ext_modules=[
     Extension("kmer_mapper.mapper",
               ["kmer_mapper/mapper.pyx"],
@@ -12,9 +13,10 @@ ext_modules=[
               extra_compile_args = ["-O3", "-march=native"],
               )
       ]
+"""
 
 setup(name='kmer_mapper',
-      version='0.0.4',
+      version='0.0.5',
       description='Kmer Mapper',
       url='http://github.com/ivargr/kmer_mapper',
       author='Ivar Grytten',
@@ -32,7 +34,7 @@ setup(name='kmer_mapper',
       cmdclass = {"build_ext": build_ext},
       #ext_modules = ext_modules
       include_dirs=np.get_include(),
-      ext_modules=cythonize(["kmer_mapper/mapper.pyx"]),
+      ext_modules=cythonize("kmer_mapper/mapper.pyx"),
 )
 
 """
@@ -42,4 +44,5 @@ auditwheel repair --plat manylinux_2_17_x86_64 dist/kmer_mapper-*-cp38-cp38-linu
 rm dist/*.whl
 mv wheelhouse/* dist
 python3 -m twine upload --repository pypi dist/*
+
 """
