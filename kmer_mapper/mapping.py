@@ -144,7 +144,7 @@ def map_fasta_single_thread(data):
 
 def map_fasta(args):
     logging.info("Mapping fasta to kmer index %s ..." % args.kmer_index)
-    index = KmerIndex.from_file(args.kmer_index)
+    index = args.kmer_index
     args.random_id = str(np.random.random())
     to_shared_memory(index, "kmer_index"+args.random_id)
     n_nodes = index.max_node_id()

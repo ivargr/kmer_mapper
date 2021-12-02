@@ -7,6 +7,7 @@ from graph_kmer_index import KmerIndex
 from .mapping import get_kmers_from_fasta, map_fasta
 from mapper import map_kmers_to_graph_index
 import time
+from graph_kmer_index.index_bundle import IndexBundle
 
 
 
@@ -18,7 +19,17 @@ def test(args):
 
 
 def map_fasta_command(args):
-    map_fasta(args.kmer_index, args.fasta_file, args.chunk_size, args.n_threads, args.max_read_length, args.k)
+    if args.kmer_index is None:
+        if args.index_bundle is None:
+            logging.error("Either a kmer index (-i) or an index bundle (-b) needs to be specified")
+            sys.exit(1)
+        else:
+            index = IndexBundle.from_file(args.index_bundle).indexes
+            args.kmer_index = index["KmerIndex"]
+    else:
+        args.kmer_index = KmerIndex.from_file(args.kmer_index)
+
+    map_fasta(args)
 
 
 def run_argument_parser(args):
@@ -30,7 +41,8 @@ def run_argument_parser(args):
 
     subparsers = parser.add_subparsers()
     subparser = subparsers.add_parser("map")
-    subparser.add_argument("-i", "--kmer-index", required=True)
+    subparser.add_argument("-i", "--kmer-index", required=False)
+    subparser.add_argument("-b", "--index-bundle", required=False)
     subparser.add_argument("-f", "--fasta-file", required=True)
     subparser.add_argument("-k", "--kmer-size", required=False, default=31, type=int)
     subparser.add_argument("-t", "--n-threads", required=False, default=16, type=int)
@@ -41,7 +53,7 @@ def run_argument_parser(args):
     subparser.add_argument("-r", "--ignore-reverse-complement", required=False, default=False, type=bool)
     subparser.add_argument("-I", "--max-hits-per-kmer", required=False, default=1000, type=int,
                            help="Ignore kmers that have more than this amount of hits in index")
-    subparser.set_defaults(func=map_fasta)
+    subparser.set_defaults(func=map_fasta_command)
 
 
     if len(args) == 0:
