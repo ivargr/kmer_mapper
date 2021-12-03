@@ -19,6 +19,14 @@ def test(args):
 
 
 def map_fasta_command(args):
+    if args.kmer_size > 31:
+        logging.error("k must be 31 or lower")
+        sys.exit(1)
+
+    if not args.fasta_file.endswith(".fa"):
+        logging.error("Only fasta files (not fq or gzipped files) are supported for now.")
+        sys.exit(1)
+
     if args.kmer_index is None:
         if args.index_bundle is None:
             logging.error("Either a kmer index (-i) or an index bundle (-b) needs to be specified")
