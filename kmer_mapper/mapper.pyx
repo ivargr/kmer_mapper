@@ -8,6 +8,7 @@ from kmer_mapper import util
 cimport cython
 import SharedArray as sa
 from graph_kmer_index.shared_mem import to_shared_memory, SingleSharedArray
+import sys
 
 def py_read_file(filename):
     with open(filename, "r") as f:
@@ -53,32 +54,6 @@ cdef void read_sequence_to_kmer_hashes(char* sequence, np.uint64_t[:] read_array
             read_array[i] = 0
         i_reverse_complement -= 1
 
-def read_fasta(filename):
-    filename_byte_string = filename.encode("UTF-8")
-    cdef char * fname = filename_byte_string
-
-    cdef FILE * cfile
-    cfile = fopen(fname, "rb")
-    if cfile == NULL:
-        raise FileNotFoundError(2, "No such file or directory: '%s'" % filename)
-
-    cdef char * line = NULL
-    cdef size_t l = 0
-    cdef ssize_t read
-    cdef i = 0
-    while True:
-        i += 1
-        read = getline(&line, &l, cfile)
-        if read == -1: break
-
-        # skip header lines
-        if line[0] == 62:
-            continue
-
-        yield line
-
-    fclose(cfile)
-
 
 cdef void process_line(char* sequence, np.uint64_t[:] chunk_row, np.uint8_t[:] mask_row):
     cdef i = 0
@@ -106,9 +81,7 @@ def read_fasta_into_chunks(filename, chunk_size=1000, int max_read_length=150, w
     if process_reads:
         chunk = np.zeros((chunk_size, max_read_length), dtype=np.uint64)
     else:
-        #chunk = np.zeros((chunk_size, max_read_length), dtype=np.uint64)
         chunk = np.empty(chunk_size, dtype="|S" + str(max_read_length))  # max_read_length bytes for each element
-        #chunk = np.empty(chunk_size, dtype="<U" + str(max_read_length))
 
     mask = np.zeros((chunk_size, max_read_length),
                         dtype=np.bool)  # True where reads have bases (for handling short reads)
@@ -172,47 +145,6 @@ def read_fasta_into_chunks(filename, chunk_size=1000, int max_read_length=150, w
             yield chunk[0:i], mask[0:i]
 
     fclose(cfile)
-
-cpdef handle_reads(filename):
-
-    cdef int sum_hashes = 0
-    cdef int max_read_length = 150
-    #cdef np.uint64_t[:] read_array = np.zeros(read_length, dtype=np.uint64)
-    cdef np.ndarray[np.uint64_t] read_array = np.zeros(max_read_length, dtype=np.uint64)
-    #cdef np.uint64_t[:] reverse_complement_read_array = np.zeros(read_length, dtype=np.uint64)
-    cdef np.ndarray[np.uint64_t] reverse_complement_read_array = np.zeros(max_read_length, dtype=np.uint64)
-    cdef int k = 31
-    cdef np.ndarray[np.int64_t] power_array = np.power(4, np.arange(0, k))
-    cdef int read_length
-    cdef int i = 0
-
-    #lines = util.read_fasta(filename)
-    #lines = util.read_fasta(filename)
-    lines = read_fasta(filename)
-    for line in lines:
-        read_length = len(line) - 3
-        read_sequence_to_kmer_hashes(line, read_array, reverse_complement_read_array, read_length)
-        sum_hashes += read_array[0]
-        kmers = np.convolve(read_array, power_array, mode='valid')
-        reverse_complement_kmers = np.convolve(reverse_complement_read_array, power_array, mode='valid')
-        sum_hashes += reverse_complement_read_array[10]
-
-        if i == 0:
-            print(kmers)
-
-        i += 1
-
-    print(sum_hashes)
-
-
-cdef read_file(filename):
-    cdef i = 0
-    result = read_fasta(filename)
-    return i
-
-
-cpdef get_count(filename):
-    return handle_reads(filename)
 
 
 
