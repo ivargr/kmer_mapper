@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 
 
@@ -6,6 +8,9 @@ class KmerLookup:
         self._kmers = kmers
         self._representative_kmers = representative_kmers
         self._lookup = lookup
+
+    def max_node_id(self):
+        return np.max(self._lookup)
 
     def to_file(self, file_name):
         np.savez(file_name, 
@@ -45,6 +50,7 @@ class SimpleKmerLookup(KmerLookup):
 
     @classmethod
     def from_old_index_files(cls, filename):
+        logging.info("From old index files")
         data = np.load(filename)
         kmers = data["kmers"]
         unique_kmers = np.unique(kmers)
@@ -52,9 +58,9 @@ class SimpleKmerLookup(KmerLookup):
         k.index_kmers()
         return k
 
-class AdvancedKmerLookup(KmerLookup):
+class AdvancedKmerLookup(SimpleKmerLookup):
     n_bins = 20000000
-    max_value = 2**31
+    max_value = 4**31
     def _get_indexes(self, kmers):
         return self._indexed_lookup.find_queries(kmers)
 

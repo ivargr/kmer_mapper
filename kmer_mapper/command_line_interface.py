@@ -53,7 +53,7 @@ def map_using_numpy_parallel(args):
     node_counts = np.zeros(n_nodes + 1, dtype=float)
     if args.n_threads == 1:
         to_shared_memory(args.kmer_index, "kmer_index")
-        args.kmer_index = from_shared_memory(KmerIndex, "kmer_index")
+        #args.kmer_index = from_shared_memory(KmerIndex, "kmer_index")
         fasta_parser = OneLineFastaParser(args.fasta_file, args.chunk_size * 150 // 3)
         reads = fasta_parser.parse(as_shared_memory_object=False)
         for sequence_chunk in reads:
@@ -64,6 +64,7 @@ def map_using_numpy_parallel(args):
                 h = h[mask]
                 t = time.perf_counter()
                 node_counts += map_kmers_to_graph_index(args.kmer_index, args.n_nodes, h, args.max_hits_per_kmer)
+                #node_counts += args.kmer_index.get_node_counts(h)
                 logging.info("Done mapping to kmer index. Took %.3f sec" % (time.perf_counter() - t))
     else:
         args.random_id = str(np.random.random())
@@ -109,7 +110,7 @@ def map_fasta_command(args):
     else:
         if args.use_numpy:
             logging.info("Using numpy index")
-            args.kmer_index = SimpleKmerLookup.from_old_index_files(args.kmer_index)
+            args.kmer_index = Advanced2.from_old_index_files(args.kmer_index)
         else:
             args.kmer_index = KmerIndex.from_file(args.kmer_index)
 
