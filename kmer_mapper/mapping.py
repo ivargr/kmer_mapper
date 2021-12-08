@@ -10,6 +10,7 @@ from graph_kmer_index import KmerIndex
 from shared_memory_wrapper import from_shared_memory, to_shared_memory, SingleSharedArray
 from pathos.multiprocessing import Pool
 from itertools import repeat
+from .kmer_lookup import Advanced2
 
 def get_reads_as_matrices(read_file_name, chunk_size=500000, max_read_length=150):
     return (chunk for chunk in read_fasta_into_chunks(read_file_name, chunk_size, max_read_length))
@@ -131,9 +132,21 @@ def map_fasta_single_thread(data):
 
     shared_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
 
-    index = from_shared_memory(KmerIndex, "kmer_index"+args.random_id)
+    if args.use_numpy:
+        index = from_shared_memory(Advanced2, "kmer_index"+args.random_id)
+    else:
+        index = from_shared_memory(KmerIndex, "kmer_index"+args.random_id)
+
     kmers = get_kmers_from_read_matrix(read_matrix, mask, args.kmer_size, True, not args.ignore_reverse_complement)
-    node_counts = map_kmers_to_graph_index(index, args.n_nodes, kmers, args.max_hits_per_kmer)
+
+    t = time.perf_counter()
+    if args.use_numpy:
+        node_counts = index.get_node_counts(kmers)
+    else:
+        node_counts = map_kmers_to_graph_index(index, args.n_nodes, kmers, args.max_hits_per_kmer)
+
+    logging.info("----- Time spent getting node counts: %.4f" % (time.perf_counter()-t))
+
     shared_counts += node_counts
     #shared_memory_name = "node_counts"+str(np.random.randint(0,10e15))
     #to_shared_memory(SingleSharedArray(node_counts), shared_memory_name)
