@@ -7,7 +7,7 @@ from scipy.ndimage import convolve1d
 import pandas as pd
 import scipy.signal
 from graph_kmer_index import KmerIndex
-from graph_kmer_index.shared_mem import from_shared_memory, to_shared_memory, SingleSharedArray
+from shared_memory_wrapper import from_shared_memory, to_shared_memory, SingleSharedArray
 from pathos.multiprocessing import Pool
 from itertools import repeat
 
