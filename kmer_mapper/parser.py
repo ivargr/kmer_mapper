@@ -1,7 +1,4 @@
-<<<<<<< HEAD
 from shared_memory_wrapper import SingleSharedArray, to_shared_memory, from_shared_memory
-=======
->>>>>>> f62737bb653286c253b35bb1accce23200f40f9a
 import numpy as np
 HEADER = 62
 NEWLINE = 10
@@ -16,7 +13,6 @@ def get_mask_from_intervals(intervals, size):
     mask = np.logical_xor.accumulate(mask_changes)
     return mask[:-1]
 
-<<<<<<< HEAD
 
 class Sequences:
     def __init__(self, sequences, intervals_start, intervals_end):
