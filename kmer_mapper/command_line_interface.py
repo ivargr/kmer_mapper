@@ -9,6 +9,7 @@ from mapper import map_kmers_to_graph_index
 import time
 from graph_kmer_index.index_bundle import IndexBundle
 from .kmer_counting import SimpleKmerLookup
+from .kmer_lookup import Advanced2
 from .parser import OneLineFastaParser, KmerHash, Sequences
 from shared_memory_wrapper import from_shared_memory, to_shared_memory, SingleSharedArray
 from shared_memory_wrapper.shared_memory import remove_shared_memory_in_session
