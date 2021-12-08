@@ -46,6 +46,7 @@ class KmerLookup:
 class SimpleKmerLookup(KmerLookup):
     def get_node_counts(self, kmers):
         counts = self.count_kmers(kmers)
+        print(counts, self._kmers)
         return np.bincount(self._lookup, counts[self._representative_kmers])
 
     @classmethod
@@ -74,6 +75,7 @@ class AdvancedKmerLookup(SimpleKmerLookup):
 class Advanced2(AdvancedKmerLookup):
     def count_kmers(self, kmers):
         indices = self._indexed_lookup.find_matches(kmers)
+        print("I", indices)
         return np.bincount(indices, minlength=self._kmers.size)
 
 class IndexedSortedLookup(SimpleKmerLookup):
@@ -106,7 +108,7 @@ class IndexedSortedLookup(SimpleKmerLookup):
         n_iter = int(np.log2(np.max(row_sizes)))+1
         queries = queries[mask]
         found_indices = self._binary_search(queries, L, R, n_iter)
-        return L[self._sorted_values[found_indices]==queries]
+        return found_indices[self._sorted_values[found_indices]==queries]
 
     def _binary_search(self, queries, L, R, n_iter):
         """
@@ -133,7 +135,6 @@ class IndexedSortedLookup(SimpleKmerLookup):
         R = L + row_sizes-1
         m = L
         n_iter = int(np.log2(np.max(row_sizes)))+1
-        print(n_iter)
         for _ in range(n_iter):
             m = (L+R+1)//2
             is_larger = self._sorted_values[m] > queries
