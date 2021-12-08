@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 from shared_memory_wrapper import SingleSharedArray, to_shared_memory, from_shared_memory
+=======
+>>>>>>> f62737bb653286c253b35bb1accce23200f40f9a
 import numpy as np
 HEADER = 62
 NEWLINE = 10
@@ -13,6 +16,7 @@ def get_mask_from_intervals(intervals, size):
     mask = np.logical_xor.accumulate(mask_changes)
     return mask[:-1]
 
+<<<<<<< HEAD
 
 class Sequences:
     def __init__(self, sequences, intervals_start, intervals_end):
@@ -20,7 +24,6 @@ class Sequences:
         self.offsets = intervals_start[1:]
         self.intervals_start = intervals_start
         self.intervals_end = intervals_end
-        # self.offsets = offsets
 
     def __len__(self):
         return len(self.offsets)+1
@@ -60,6 +63,7 @@ class TextParser:
                 else:
                     yield chunk
 
+
     def parse_chunk(self):
         a, bytes_read = self.read_raw_chunk()
         self._is_finished = bytes_read < self._chunk_size
@@ -92,7 +96,7 @@ class OneLineFastaParser(TextParser):
         new_lines = new_lines[:idx_last_sequence_line+2]
         is_sequence_line = is_sequence_line[:idx_last_sequence_line+1]
         array = self._cut_array(array, new_lines[-1])
-        # print(new_lines, is_sequence_line)
+
         #Create a mask for where the sequences ara and move sequences to continous array
         sequence_starts = new_lines[:-1][is_sequence_line]+1
         sequence_ends = new_lines[1:][is_sequence_line]
@@ -104,6 +108,7 @@ class OneLineFastaParser(TextParser):
         # print(new_intervals)
         # print(array[mask])
         return Sequences(array[mask], new_intervals[0], new_intervals[1])
+
 
 class FastaParser(TextParser):
     def _get_sequence_offsets(self, new_lines, is_header):
@@ -153,6 +158,7 @@ class KmerHash:
         self.k=k
         self.POWER_ARRAY = np.power(4, np.arange(k, dtype=np.uint64), dtype=np.uint64)
         self.REV_POWER_ARRAY = np.power(4, np.arange(k, dtype=np.uint64)[::-1], dtype=np.uint64)
+
 
     def _to_text(self, seq):
         return "".join(letters[n] for n in seq)
