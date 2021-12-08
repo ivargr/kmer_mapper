@@ -7,6 +7,7 @@ letters = ["A", "C", "T", "G"]
 to_text = lambda x: "".join(chr(r) for r in x)
 
 def get_mask_from_intervals(intervals, size):
+    """ intervals = (starts, ends) """
     mask_changes = np.zeros(size+1, dtype="bool")
     mask_changes[intervals[0]]=True
     mask_changes[intervals[1]]^=True
@@ -92,18 +93,31 @@ class OneLineFastaParser(TextParser):
         new_lines = new_lines[:idx_last_sequence_line+2]
         is_sequence_line = is_sequence_line[:idx_last_sequence_line+1]
         array = self._cut_array(array, new_lines[-1])
-
-        #Create a mask for where the sequences ara and move sequences to continous array
         sequence_starts = new_lines[:-1][is_sequence_line]+1
         sequence_ends = new_lines[1:][is_sequence_line]
-        # intervals = new_lines.reshape(-1, 2)[is_sequence_line]
-        # sequence_intervals = (intervals[:, 0]+1, intervals[:, 1])
+        return self._mask_and_move_sequences(array, sequence_starts, sequence_ends)
+
+    def _mask_and_move_sequences(self, array, sequence_starts, sequence_ends):
+        """
+        Create a mask for where the sequences are and move sequences to continous array
+        """
         mask = get_mask_from_intervals((sequence_starts, sequence_ends), array.size)
         removed_areas = np.cumsum(sequence_starts-np.insert(sequence_ends[:-1], 0, 0))
         new_intervals = (sequence_starts-removed_areas, sequence_ends-removed_areas)
-        # print(new_intervals)
-        # print(array[mask])
         return Sequences(array[mask], new_intervals[0], new_intervals[1])
+
+class OneLineFastaParser2bit(OneLineFastaParser2bit):
+    def _mask_and_move_sequences(self, array, sequence_starts, sequence_ends):
+        """
+        Create a mask for where the sequences are and move sequences to continous array
+        """
+        start_idxs = sequence_starts // 4
+        end_idxs = sequence_ends // 4
+        mask = get_mask_from_intervals((sequence_starts, sequence_ends), array.size)
+        removed_areas = np.cumsum(sequence_starts-np.insert(sequence_ends[:-1], 0, 0))
+        new_intervals = (sequence_starts-removed_areas, sequence_ends-removed_areas)
+        return Sequences(array[mask], new_intervals[0], new_intervals[1])
+
 
 
 class FastaParser(TextParser):

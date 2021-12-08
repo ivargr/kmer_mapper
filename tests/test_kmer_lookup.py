@@ -40,6 +40,8 @@ def simple_kmer_lookup():
     lookup = np.array([0, 1, 1, 3, 4, 5])
 
     kmer_lookup = Advanced2(kmers, representative_kmers, lookup)
+    kmer_lookup.max_value= 10
+    kmer_lookup.n_bins = 3
     kmer_lookup.index_kmers()
     return kmer_lookup
 

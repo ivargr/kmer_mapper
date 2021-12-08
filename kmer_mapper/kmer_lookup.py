@@ -41,7 +41,6 @@ class KmerLookup:
 class SimpleKmerLookup(KmerLookup):
     def get_node_counts(self, kmers):
         counts = self.count_kmers(kmers)
-        print(counts, self._kmers)
         return np.bincount(self._lookup, counts[self._representative_kmers])
 
     @classmethod
@@ -54,8 +53,8 @@ class SimpleKmerLookup(KmerLookup):
         return k
 
 class AdvancedKmerLookup(SimpleKmerLookup):
-    n_bins = 20000000
-    max_value = 2**31
+    n_bins = 200000000
+    max_value = 4**31
     def _get_indexes(self, kmers):
         return self._indexed_lookup.find_queries(kmers)
 
@@ -69,12 +68,11 @@ class AdvancedKmerLookup(SimpleKmerLookup):
 class Advanced2(AdvancedKmerLookup):
     def count_kmers(self, kmers):
         indices = self._indexed_lookup.find_matches(kmers)
-        print("I", indices)
         return np.bincount(indices, minlength=self._kmers.size)
 
 class IndexedSortedLookup(SimpleKmerLookup):
     def __init__(self, sorted_values, index, mod, row_sizes):
-        self._sorted_values = np.append(sorted_values, 4**31)
+        self._sorted_values = np.append(sorted_values, np.array([4**31], dtype=np.uint64))
         self._mod = mod
         self._index = index
         self._row_sizes = row_sizes
@@ -88,7 +86,6 @@ class IndexedSortedLookup(SimpleKmerLookup):
         m = values//mod
         index = np.searchsorted(m, np.arange(max_value//mod+2))
         row_sizes = index[1:]-index[:-1]
-        print(values, index, row_sizes)
         return cls(values, index[:-1], mod, row_sizes)
 
     def find_matches(self, queries):
@@ -160,4 +157,3 @@ class HashedKmerLookup(SimpleKmerLookup):
         self._multi_hit_mask = n_hits>1
         self._hash_to_kmer_idx = np.empty_like(n_hits)
         self._hash_to_kmer_idx[hashes] = np.arange(kmers.size)
-        
