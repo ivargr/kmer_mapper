@@ -1,4 +1,4 @@
-from kmer_mapper.count_kmers import KmerLookup, SimpleKmerLookup
+from kmer_mapper.kmer_lookup import *
 import pytest
 import numpy as np
 
@@ -39,7 +39,7 @@ def simple_kmer_lookup():
                             5]
     lookup = np.array([0, 1, 1, 3, 4, 5])
 
-    kmer_lookup = SimpleKmerLookup(kmers, representative_kmers, lookup)
+    kmer_lookup = Advanced2(kmers, representative_kmers, lookup)
     kmer_lookup.index_kmers()
     return kmer_lookup
 
@@ -58,4 +58,5 @@ def test_get_node_counts(kmer_lookup, sample_kmers):
 
 def test_simple_get_node_counts(simple_kmer_lookup, sample_kmers):
     counts = simple_kmer_lookup.get_node_counts(sample_kmers)
+    print(counts)
     assert np.all(counts == [1, 1, 0, 1, 2, 1])
