@@ -46,7 +46,6 @@ class KmerLookup:
 class SimpleKmerLookup(KmerLookup):
     def get_node_counts(self, kmers):
         counts = self.count_kmers(kmers)
-        print(counts, self._kmers)
         return np.bincount(self._lookup, counts[self._representative_kmers])
 
     @classmethod

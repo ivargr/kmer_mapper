@@ -6,10 +6,7 @@ np.random.seed(1)
 def test():
     old_index = KmerIndex.from_file("kmer_index_only_variants.npz")
     new_index = Advanced2.from_old_index_files("kmer_index_only_variants.npz")
-
-    random_kmers = np.random.randint(0, 4**31, 1000)
     kmers = old_index._kmers
-
 
     for kmer in kmers:
         old_hits = old_index.get(int(kmer), max_hits=1000000000)[0]

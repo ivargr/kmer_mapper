@@ -63,8 +63,8 @@ def map_using_numpy_parallel(args):
             for h in (hashes, reverse_complement_hashes):
                 h = h[mask]
                 t = time.perf_counter()
-                node_counts += map_kmers_to_graph_index(args.kmer_index, args.n_nodes, h, args.max_hits_per_kmer)
-                #node_counts += args.kmer_index.get_node_counts(h)
+                #node_counts += map_kmers_to_graph_index(args.kmer_index, args.n_nodes, h, args.max_hits_per_kmer)
+                node_counts += args.kmer_index.get_node_counts(h)
                 logging.info("Done mapping to kmer index. Took %.3f sec" % (time.perf_counter() - t))
     else:
         args.random_id = str(np.random.random())
