@@ -106,18 +106,17 @@ class OneLineFastaParser(TextParser):
         new_intervals = (sequence_starts-removed_areas, sequence_ends-removed_areas)
         return Sequences(array[mask], new_intervals[0], new_intervals[1])
 
+"""
 class OneLineFastaParser2bit(OneLineFastaParser2bit):
     def _mask_and_move_sequences(self, array, sequence_starts, sequence_ends):
-        """
-        Create a mask for where the sequences are and move sequences to continous array
-        """
+        #Create a mask for where the sequences are and move sequences to continous array
         start_idxs = sequence_starts // 4
         end_idxs = sequence_ends // 4
         mask = get_mask_from_intervals((sequence_starts, sequence_ends), array.size)
         removed_areas = np.cumsum(sequence_starts-np.insert(sequence_ends[:-1], 0, 0))
         new_intervals = (sequence_starts-removed_areas, sequence_ends-removed_areas)
         return Sequences(array[mask], new_intervals[0], new_intervals[1])
-
+"""
 
 
 class FastaParser(TextParser):
