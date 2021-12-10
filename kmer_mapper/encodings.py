@@ -1,12 +1,12 @@
 from itertools import product
 import numpy as np
 
+from .parser import get_kmer_mask
+
+
 class TwoBitEncoding:
     pass
 
-class TwoBitSequence:
-    def __init__():
-        pass
 
 class ACTGTwoBitEncoding:
     letters = ["A", "C", "T", "G"]
@@ -64,6 +64,8 @@ class ACTGTwoBitEncoding:
         return cls.reverse[all_bytes.flatten()]+96
 
 
+
+
 class SimpleEncoding(ACTGTwoBitEncoding):
     _lookup_byte_to_2bits = np.zeros(256, dtype=np.uint8)
     _lookup_byte_to_2bits[[97, 65]] = 0
@@ -89,6 +91,19 @@ class SimpleEncoding(ACTGTwoBitEncoding):
         two_bits = cls.convert_byte_to_2bits(sequence)
         codes = cls.join_2bits_to_byte(two_bits.reshape(-1, 4))
         return codes.flatten()
+
+
+class TwoBitSequences:
+    encoding = ACTGTwoBitEncoding
+    def __init__(self, sequences, intervals):
+        self.sequences = sequences
+        self.intervals = intervals
+
+    @classmethod
+    def from_byte_sequence(cls, sequences):
+        twobit_sequences = cls.encoding.from_bytes(sequences.sequences)
+        intervals = (sequences.intervals_start, sequences.intervals_end)
+        return cls(twobit_sequences, intervals)
 
 class TwoBitHash:
     first_2 = np.uint64(2**63+2**62)
@@ -136,6 +151,14 @@ class TwoBitHash:
         added = (sequence[1:] & self._move_from_mask) << self._moves
         shifted[:-1] |= added
         return ((shifted & self._masks)>>self._mask_shifts).flatten()[:self._n_letters_in_dtype*sequence.size-self.k+1]
+
+    def get_kmer_hashes(self, sequences):
+        """Matching old interface"""
+        mask = get_kmer_mask(sequences.intervals, sequences.sequences.size*4, self.k)
+        kmers = self.np_get_kmers(sequences.sequences.view(self._dtype))
+        forward_hashes = twobit_swap(kmers) >> ((self._n_letters_in_dtype-self.k)*2)
+        reverse_hashes = sequences.encoding.complement(kmers) & self._dtype(4**self.k-1)
+        return forward_hashes, reverse_hashes, mask
 
     def get_kmers(self, sequence):
         assert sequence.dtype==np.uint8, sequence.dtype

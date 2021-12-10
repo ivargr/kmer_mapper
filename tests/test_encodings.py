@@ -1,5 +1,5 @@
 from kmer_mapper.encodings import ACTGTwoBitEncoding
-from kmer_mapper.encodings import SimpleEncoding, TwoBitHash, twobit_swap
+from kmer_mapper.encodings import SimpleEncoding, TwoBitHash, twobit_swap, TwoBitSequences
 from kmer_mapper.parser import Sequences, KmerHash
 import numpy as np
 Encoding = ACTGTwoBitEncoding
@@ -85,7 +85,7 @@ def test_hash_with_complement():
     k = 31
     dtype=np.uint64
     np.random.seed(100)
-    sequence = np.random.choice([97, 99, 116, 103, 65, 67, 71, 84], 128).astype(np.uint8)
+    sequence = np.random.choice([97, 99, 116, 103, 65, 67, 71, 84], 32).astype(np.uint8)
     _sequence = np.array([97, 99, 116, 103, 116, 65, 67, 67,
                          99, 99, 99, 65, 116, 116, 67, 67,
                          116, 99, 116, 67, 67, 65, 67, 103,
@@ -93,16 +93,17 @@ def test_hash_with_complement():
                         dtype="uint8")
     codes = SimpleEncoding.convert_byte_to_2bits(sequence)
     s = Sequences(sequence, np.array([0]), np.array([codes.size]))
-    true_kmers, true_rev_kmers, _ = KmerHash(k).get_kmer_hashes(s)
-    bits = Encoding.from_bytes(sequence)
+    true_kmers, true_rev_kmers, true_mask = KmerHash(k).get_kmer_hashes(s)
+    two_bit_sequences = TwoBitSequences.from_byte_sequence(s)
+    # bits = Encoding.from_bytes(sequence)
     h = TwoBitHash(k=k, dtype=dtype)
-    kmers = h.np_get_kmers(bits.view(dtype))
-    rev_kmers = Encoding.complement(kmers) & dtype(4**k-1)
-    kmers = twobit_swap(kmers)>>2
+    kmers, rev_kmers, mask = h.get_kmer_hashes(two_bit_sequences)
+    # kmers = h.np_get_kmers(bits.view(dtype))
+    # rev_kmers = Encoding.complement(kmers) & dtype(4**k-1)
+    # kmers = twobit_swap(kmers)>>2
     assert np.all(np.sort(kmers)==np.sort(true_kmers))
     assert np.all(np.sort(rev_kmers)==np.sort(true_rev_kmers))
-
-
+    assert np.all(mask==true_mask)
                                
 if __name__ == "__main__":
     test_simple()

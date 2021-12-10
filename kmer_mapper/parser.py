@@ -17,7 +17,7 @@ def get_mask_from_intervals(intervals, size):
 def get_kmer_mask(intervals, size, k=31):
     starts, ends = intervals
     ends = np.maximum(starts, ends-k+1)
-    return get_mask_from_intervals(intervals, (starts, ends))
+    return get_mask_from_intervals((starts, ends), size-k+1)
 
 class Sequences:
     def __init__(self, sequences, intervals_start, intervals_end):
