@@ -105,13 +105,13 @@ class TwoBitHash:
         self._shifts = n_bits_to_be_moved*np.arange(n_shifts, dtype=dtype)
         self._masks = dtype(4**k-1) << (2*np.arange(n_masks, dtype=dtype))
         self._mask_shifts = dtype(2)*np.arange(n_masks, dtype=dtype)
-        self._move_to_mask = dtype(2)**(n_bits_to_be_moved*np.arange(n_shifts, dtype=dtype))-dtype(1)
+        self._move_from_mask = dtype(2)**(n_bits_to_be_moved*np.arange(n_shifts, dtype=dtype))-dtype(1)
         self._moves = (dtype(n_bits_in_dtype)-dtype(n_bits_to_be_moved)*np.arange(n_shifts, dtype=dtype))
-        self._move_from_mask = self._move_to_mask << self._moves
+        self._move_to_mask = (self._move_from_mask << self._moves).astype(dtype)
         self._set_correct_shapes()
 
     def __repr__(self):
-        return "\n".join(str(c) for c in
+        return ">>>\n".join(str(c) for c in
                          [self._shifts, 
                           [bin(m) for m in self._masks.flatten()], 
                           self._moves,
@@ -123,14 +123,17 @@ class TwoBitHash:
         self._shifts = self._shifts.reshape(1, -1, 1)
         self._moves = self._moves.reshape(1, -1, 1)
         self._move_from_mask = self._move_from_mask.reshape(1, -1, 1)
+        self._move_to_mask = self._move_to_mask.reshape(1, -1, 1)
 
     def np_get_kmers(self, sequence):
         assert sequence.dtype==self._dtype, sequence.dtype
+        print("##########>>>", [bin(s) for s in sequence])
         sequence = sequence.reshape(-1, 1, 1)
-        print(sequence)
-        shifted = (sequence << self._shifts)
-        shifted[:-1] |= (sequence[1:] & self._move_from_mask) >> self._moves
-        return ((shifted & self._masks)>>self._mask_shifts).flatten()[:sequence.size*self._n_letters_in_dtype-self.k+1]
+        assert sequence.dtype==self._dtype, sequence.dtype
+        shifted = (sequence >> self._shifts) & ~self._move_to_mask
+        added = (sequence[1:] & self._move_from_mask) << self._moves
+        shifted[:-1] |= added
+        return ((shifted & self._masks)>>self._mask_shifts).flatten()[:self._n_letters_in_dtype*sequence.size-self.k+1]
 
     def get_kmers(self, sequence):
         assert sequence.dtype==np.uint8, sequence.dtype
@@ -156,17 +159,26 @@ if __name__ == "__main__":
     k = 7
     dtype=np.uint16
     h = TwoBitHash(k=k, dtype=dtype)
-    s = "GGGGCCCCTTTTAAAA"# *4
-    # s = "GGGGCCCC"
+    # s = "GGGGCCCCTTTTAAAA"# *4
+    s = "AGCTTCGCTGCCTTGG"# *4
+    #s += "GGGGCCCCGGGCCGGT"
+    #s += "GGGGCCCCTTTTAAAA"# *4
     bits = ACTGTwoBitEncoding.from_string(s)
-    print([bin(b) for b in bits])
-    #print(h)
+    # print([bin(b) for b in bits])
+    # print(h)
     print(ACTGTwoBitEncoding.to_string(bits))
     kmers = h.np_get_kmers(bits.view(dtype))
     print([bin(k) for k in kmers])
     print(kmers)
+    print("TRUTH")
     print([bin(k) for k in simple_hash(s, k=k)])
     print(simple_hash(s, k=k))
+    print("----------DEBUG-------------")
+    print([bin(m) for m in  h._masks[0,0]])
+    print([bin(m) for m in  h._move_to_mask[0,:, 0]])
+    print([bin(m) for m in  h._move_from_mask[0,:, 0]])
+    print(h._mask_shifts)
+
     # print(dtype(4**k-1) & bits.view(dtype))
     # print(((dtype(4**k-1)<<2) & bits.view(dtype))>>2)
     #print([ACTGTwoBitEncoding.to_string(kmers[i:i+1].view(np.uint8))
