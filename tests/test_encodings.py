@@ -1,5 +1,6 @@
 from kmer_mapper.encodings import ACTGTwoBitEncoding
-from kmer_mapper.encodings import SimpleEncoding, TwoBitHash
+from kmer_mapper.encodings import SimpleEncoding, TwoBitHash, twobit_swap
+from kmer_mapper.parser import Sequences, KmerHash
 import numpy as np
 Encoding = ACTGTwoBitEncoding
 # SimpleEncoding
@@ -64,6 +65,44 @@ def test_hashing():
     h = TwoBitHash(k=k, dtype=dtype)
     kmers = h.np_get_kmers(bits.view(dtype))
     assert np.all(kmers==true_kmers)
+
+def test_twobit_swap():
+    sequence = np.array([97, 99, 116, 103, 116, 65, 67, 67,
+                         99, 99, 99, 65, 116, 116, 67, 67,
+                         116, 99, 116, 67, 67, 65, 67, 103,
+                         116, 103, 65, 65, 65, 65, 67, 103],
+                        dtype="uint8")
+
+    _sequence = np.array([97, 99, 116, 103, 116, 65, 67, 67],
+                        dtype="uint8")
+    twobits = Encoding.from_bytes(sequence)
+    print(twobits)
+    reverse_twobits = Encoding.from_bytes(sequence[::-1])
+    print(reverse_twobits)
+    assert twobit_swap(twobits.view(np.uint64)) == reverse_twobits.view(np.uint64)
+
+def test_hash_with_complement():
+    k = 31
+    dtype=np.uint64
+    np.random.seed(100)
+    sequence = np.random.choice([97, 99, 116, 103, 65, 67, 71, 84], 128).astype(np.uint8)
+    _sequence = np.array([97, 99, 116, 103, 116, 65, 67, 67,
+                         99, 99, 99, 65, 116, 116, 67, 67,
+                         116, 99, 116, 67, 67, 65, 67, 103,
+                         116, 103, 65, 65, 65, 65, 67, 103],
+                        dtype="uint8")
+    codes = SimpleEncoding.convert_byte_to_2bits(sequence)
+    s = Sequences(sequence, np.array([0]), np.array([codes.size]))
+    true_kmers, true_rev_kmers, _ = KmerHash(k).get_kmer_hashes(s)
+    bits = Encoding.from_bytes(sequence)
+    h = TwoBitHash(k=k, dtype=dtype)
+    kmers = h.np_get_kmers(bits.view(dtype))
+    rev_kmers = Encoding.complement(kmers) & dtype(4**k-1)
+    kmers = twobit_swap(kmers)>>2
+    assert np.all(np.sort(kmers)==np.sort(true_kmers))
+    assert np.all(np.sort(rev_kmers)==np.sort(true_rev_kmers))
+
+
                                
 if __name__ == "__main__":
     test_simple()

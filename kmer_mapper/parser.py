@@ -14,6 +14,10 @@ def get_mask_from_intervals(intervals, size):
     mask = np.logical_xor.accumulate(mask_changes)
     return mask[:-1]
 
+def get_kmer_mask(intervals, size, k=31):
+    starts, ends = intervals
+    ends = np.maximum(starts, ends-k+1)
+    return get_mask_from_intervals(intervals, (starts, ends))
 
 class Sequences:
     def __init__(self, sequences, intervals_start, intervals_end):
@@ -106,7 +110,7 @@ class OneLineFastaParser(TextParser):
         new_intervals = (sequence_starts-removed_areas, sequence_ends-removed_areas)
         return Sequences(array[mask], new_intervals[0], new_intervals[1])
 
-class OneLineFastaParser2bit(OneLineFastaParser2bit):
+class OneLineFastaParser2bit(OneLineFastaParser):
     def _mask_and_move_sequences(self, array, sequence_starts, sequence_ends):
         """
         Create a mask for where the sequences are and move sequences to continous array
@@ -117,7 +121,6 @@ class OneLineFastaParser2bit(OneLineFastaParser2bit):
         removed_areas = np.cumsum(sequence_starts-np.insert(sequence_ends[:-1], 0, 0))
         new_intervals = (sequence_starts-removed_areas, sequence_ends-removed_areas)
         return Sequences(array[mask], new_intervals[0], new_intervals[1])
-
 
 
 class FastaParser(TextParser):

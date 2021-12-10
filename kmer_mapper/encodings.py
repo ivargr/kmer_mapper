@@ -31,8 +31,10 @@ class ACTGTwoBitEncoding:
         return np.bitwise_or.reduce(four_bits << cls._shift_4bits, axis=1)
 
     @classmethod
-    def complement(cls, char): ##No 
-        return char ^ np.uint8(2)
+    def complement(cls, char):
+        complements = np.packbits([1, 0, 1, 0, 1, 0, 1, 0])
+        dtype = char.dtype
+        return (char.view(np.uint8) ^ complements).view(dtype)
 
     @classmethod
     def from_bytes(cls, sequence):
@@ -149,11 +151,20 @@ class TwoBitHash:
 def simple_hash(s, k):
     codes = SimpleEncoding.convert_byte_to_2bits(
         np.array([ord(c) for c in s], dtype=np.uint8))
-
     power_array = 4**np.arange(k)[::-1]
     print("->", np.sum(power_array*codes[:power_array.size]))
     return np.convolve(codes, power_array, mode="valid")
-    
+
+def twobit_swap(number):
+    dtype = number.dtype
+    byte_lookup = np.zeros(256, dtype=np.uint8)
+    power_array = 4**np.arange(4)
+    rev_power_array = power_array[::-1]
+    for two_bit_string in product([0, 1, 2, 3], repeat=4):
+        byte_lookup[np.sum(power_array*two_bit_string)] = np.sum(rev_power_array*two_bit_string)
+    new_bytes = byte_lookup[number.view(np.uint8)]
+    return new_bytes.view(dtype).byteswap()
+
 
 if __name__ == "__main__":
     k = 7
