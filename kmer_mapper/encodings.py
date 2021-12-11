@@ -1,6 +1,27 @@
 from itertools import product
 import numpy as np
 
+class BaseEncoding:
+    """ Basic ACII byte encoding """
+
+    @classmethod
+    def from_string(cls, sequence):
+        return np.array([ord(c) for c in sequence], dtype=np.uint8)
+
+    @classmethod
+    def from_bytes(cls, sequence):
+        """Identity"""
+        return sequence
+
+    @classmethod
+    def to_bytes(cls, sequence):
+        """Identity"""
+        return sequence
+
+    @classmethod
+    def to_string(cls, byte_sequence):
+        return "".join(chr(b) for b in byte_sequence)
+
 class ACTGTwoBitEncoding:
     letters = ["A", "C", "T", "G"]
     bitcodes = ["00", "01", 
@@ -79,19 +100,6 @@ class SimpleEncoding(ACTGTwoBitEncoding):
         two_bits = cls.convert_byte_to_2bits(sequence)
         codes = cls.join_2bits_to_byte(two_bits.reshape(-1, 4))
         return codes.flatten()
-
-
-class TwoBitSequences:
-    encoding = ACTGTwoBitEncoding
-    def __init__(self, sequences, intervals):
-        self.sequences = sequences
-        self.intervals = intervals
-
-    @classmethod
-    def from_byte_sequence(cls, sequences):
-        twobit_sequences = cls.encoding.from_bytes(sequences.sequences)
-        intervals = (sequences.intervals_start, sequences.intervals_end)
-        return cls(twobit_sequences, intervals)
 
 def twobit_swap(number):
     dtype = number.dtype

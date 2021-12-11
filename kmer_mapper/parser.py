@@ -1,8 +1,9 @@
 from shared_memory_wrapper import SingleSharedArray, to_shared_memory, from_shared_memory
 import numpy as np
-NEWLINE = 10
 
-to_text = lambda x: "".join(chr(r) for r in x)
+from .sequences import Sequences
+from .encodings import BaseEncoding, ACTGTwoBitEncoding
+NEWLINE = 10
 
 def get_mask_from_intervals(intervals, size):
     """ intervals = (starts, ends) """
@@ -12,30 +13,8 @@ def get_mask_from_intervals(intervals, size):
     mask = np.logical_xor.accumulate(mask_changes)
     return mask[:-1]
 
-class Sequences:
-    def __init__(self, sequences, intervals_start, intervals_end):
-        assert intervals_start.size == intervals_end.size
-        self.sequences = sequences
-        self.offsets = intervals_start[1:]
-        self.intervals_start = intervals_start
-        self.intervals_end = intervals_end
-
-    def __len__(self):
-        return len(self.offsets)+1
-
-    def __getitem__(self, i):
-        start, end = (0, len(self.sequences))
-        if i > 0:
-            start = self.offsets[i-1]
-        if i < len(self.offsets):
-            end = self.offsets[i]
-        return self.sequences[start:end]
-
-    def __repr__(self):
-        return "Seqs(%s, %s)" % (to_text(self.sequences), self.offsets)
-
-
 class TextParser:
+    _encoding = BaseEncoding
     def __init__(self, filename, chunk_size=1000000):
         self._file_obj = open(filename, "rb")
         self._chunk_size = chunk_size
@@ -99,7 +78,8 @@ class OneLineParser(TextParser):
         d = m%self._buffer_divisor
         seq = np.empty(m-d+self._buffer_divisor, dtype=array.dtype)
         seq[:m] = array[mask]
-        return Sequences(seq, new_intervals[0], new_intervals[1])
+        seq = self._encoding.from_bytes(seq)
+        return Sequences(seq, new_intervals, encoding=self._encoding)
 
     def _validate_chunk(self, chunk, new_lines):
         assert chunk[0] == self.HEADER, "Chunk does not start with header"
@@ -117,6 +97,7 @@ class FastqParser(OneLineParser):
 
 class FastqParser2Bit(FastqParser):
     _buffer_divisor = 32
+    _encoding = ACTGTwoBitEncoding
 
 
 class OneLineFastaParser(OneLineParser):
@@ -155,6 +136,7 @@ class LooseOneLineFastaParser(OneLineParser):
 
 class OneLineFastaParser2bit(OneLineFastaParser):
     _buffer_divisor = 32
+    _encoding = ACTGTwoBitEncoding
     def _mask_and_move_sequences__(self, array, sequence_starts, sequence_ends):
         """
         Create a mask for where the sequences are and move sequences to continous array

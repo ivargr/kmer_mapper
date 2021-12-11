@@ -1,5 +1,5 @@
 from kmer_mapper.encodings import ACTGTwoBitEncoding
-from kmer_mapper.encodings import SimpleEncoding,  twobit_swap, TwoBitSequences
+from kmer_mapper.encodings import SimpleEncoding,  twobit_swap
 from kmer_mapper.kmers import TwoBitHash, KmerHash
 from kmer_mapper.parser import Sequences
 import numpy as np
@@ -94,9 +94,10 @@ def test_hash_with_complement():
                          116, 103, 65, 65, 65, 65, 67, 103],
                         dtype="uint8")
     codes = SimpleEncoding.convert_byte_to_2bits(sequence)
-    s = Sequences(sequence, np.array([0]), np.array([codes.size]))
+    intervals = (np.array([0]), np.array([codes.size]))
+    s = Sequences(sequence, intervals)
     true_kmers, true_rev_kmers, true_mask = KmerHash(k).get_kmer_hashes(s)
-    two_bit_sequences = TwoBitSequences.from_byte_sequence(s)
+    two_bit_sequences = Sequences(Encoding.from_bytes(sequence), intervals, encoding=Encoding)
     # bits = Encoding.from_bytes(sequence)
     h = TwoBitHash(k=k, dtype=dtype)
     kmers, rev_kmers, mask = h.get_kmer_hashes(two_bit_sequences)
