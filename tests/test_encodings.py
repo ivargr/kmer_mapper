@@ -1,7 +1,7 @@
 from kmer_mapper.encodings import ACTGTwoBitEncoding
 from kmer_mapper.encodings import SimpleEncoding,  twobit_swap, TwoBitSequences
-from kmer_mapper.kmers import TwoBitHash
-from kmer_mapper.parser import Sequences, KmerHash
+from kmer_mapper.kmers import TwoBitHash, KmerHash
+from kmer_mapper.parser import Sequences
 import numpy as np
 Encoding = ACTGTwoBitEncoding
 def test_simple():

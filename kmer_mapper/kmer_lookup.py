@@ -25,8 +25,6 @@ class KmerLookup:
                    data["representative_kmers"],
                    data["lookup"])
 
-
-
     def index_kmers(self):
         self._kmers.sort()
         self._representative_kmers = np.searchsorted(self._kmers, self._representative_kmers)

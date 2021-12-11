@@ -1,8 +1,6 @@
 from shared_memory_wrapper import SingleSharedArray, to_shared_memory, from_shared_memory
 import numpy as np
-HEADER = 62
 NEWLINE = 10
-letters = ["A", "C", "T", "G"]
 
 to_text = lambda x: "".join(chr(r) for r in x)
 
@@ -13,11 +11,6 @@ def get_mask_from_intervals(intervals, size):
     mask_changes[intervals[1]]^=True
     mask = np.logical_xor.accumulate(mask_changes)
     return mask[:-1]
-
-def get_kmer_mask(intervals, size, k=31):
-    starts, ends = intervals
-    ends = np.maximum(starts, ends-k+1)
-    return get_mask_from_intervals((starts, ends), size-k+1)
 
 class Sequences:
     def __init__(self, sequences, intervals_start, intervals_end):
@@ -65,33 +58,81 @@ class TextParser:
                 else:
                     yield chunk
 
-
     def parse_chunk(self):
         a, bytes_read = self.read_raw_chunk()
         self._is_finished = bytes_read < self._chunk_size
         if bytes_read == 0:
             return None
+        if self._is_finished  and a[bytes_read-1] != NEWLINE:
+            a[bytes_read]  = NEWLINE
         sequences = self.get_sequences(a[:bytes_read])
         if not self._is_finished:
             self._file_obj.seek(self._last_header_idx-self._chunk_size, 1)
         return sequences
 
-class OneLineFastaParser(TextParser):
-    HEADER = 62
-    n_lines_per_entry = 2
+class OneLineParser(TextParser):
+    """
+    Base class for formats where the sequnences
+    are contained to sinlge line
+    """
+    _buffer_divisor=1
+
+    def get_sequences(self, raw_chunk):
+        new_lines = np.flatnonzero(raw_chunk==NEWLINE)
+        chunk, new_lines = self._validate_chunk(raw_chunk, new_lines)
+        sequence_starts = new_lines[::self.n_lines_per_entry]+1
+        sequence_ends = new_lines[1::self.n_lines_per_entry]
+        return self._mask_and_move_sequences(chunk, sequence_starts, sequence_ends)
+
     def _cut_array(self, array, last_newline):
         self._last_header_idx = last_newline+1
         return array[:last_newline]
 
-    def get_sequences(self, array):
-        # print("<--", to_text(array), "-->")
-        # print(array.size, array[-1], self._is_finished)
-        assert array[0]==self.HEADER
-        new_lines = np.flatnonzero(array==NEWLINE)
-        if self._is_finished and array[-1] != NEWLINE:
-            #Add a trailing newline if this is the last chunk
-            new_lines = np.append(new_lines, array.size) 
+    def _mask_and_move_sequences(self, array, sequence_starts, sequence_ends):
+        """
+        Create a mask for where the sequences are and move sequences to continous array
+        """
+        mask = get_mask_from_intervals((sequence_starts, sequence_ends), array.size)
+        removed_areas = np.cumsum(sequence_starts-np.insert(sequence_ends[:-1], 0, 0))
+        new_intervals = (sequence_starts-removed_areas, sequence_ends-removed_areas)
+        m = np.sum(mask)
+        d = m%self._buffer_divisor
+        seq = np.empty(m-d+self._buffer_divisor, dtype=array.dtype)
+        seq[:m] = array[mask]
+        return Sequences(seq, new_intervals[0], new_intervals[1])
 
+    def _validate_chunk(self, chunk, new_lines):
+        assert chunk[0] == self.HEADER, "Chunk does not start with header"
+        n_lines = new_lines.size
+        assert n_lines >=self.n_lines_per_entry, "No complete entry in buffer"
+        new_lines = new_lines[:n_lines-(n_lines%self.n_lines_per_entry)]
+        header_idxs = new_lines[self.n_lines_per_entry-1:-1:self.n_lines_per_entry]+1
+        assert np.all(chunk[header_idxs]==self.HEADER)
+        return self._cut_array(chunk, new_lines[-1]), new_lines
+
+class FastqParser(OneLineParser):
+    HEADER = 64
+    n_lines_per_entry = 4
+
+
+class FastqParser2Bit(FastqParser):
+    _buffer_divisor = 32
+
+
+class OneLineFastaParser(OneLineParser):
+    HEADER= 62
+    n_lines_per_entry = 2
+
+
+class LooseOneLineFastaParser(OneLineParser):
+    HEADER = 62
+    n_lines_per_entry = 2
+
+    def _validate_chunk(self, chunk, new_lines):
+        assert chunk[0]==self.HEADER
+
+    def get_sequences(self, array):
+        new_lines = np.flatnonzero(array==NEWLINE)
         # Find which lines are sequences, and cut the array so that it ends with a complete sequence
         is_sequence_line = array[new_lines[:-1]+1] != self.HEADER
         # assert np.any(is_sequence_line), (array, self._is_finished)
@@ -103,7 +144,7 @@ class OneLineFastaParser(TextParser):
         sequence_ends = new_lines[1:][is_sequence_line]
         return self._mask_and_move_sequences(array, sequence_starts, sequence_ends)
 
-    def _mask_and_move_sequences(self, array, sequence_starts, sequence_ends):
+    def _mask_and_move_sequences__(self, array, sequence_starts, sequence_ends):
         """
         Create a mask for where the sequences are and move sequences to continous array
         """
@@ -113,7 +154,8 @@ class OneLineFastaParser(TextParser):
         return Sequences(array[mask], new_intervals[0], new_intervals[1])
 
 class OneLineFastaParser2bit(OneLineFastaParser):
-    def _mask_and_move_sequences(self, array, sequence_starts, sequence_ends):
+    _buffer_divisor = 32
+    def _mask_and_move_sequences__(self, array, sequence_starts, sequence_ends):
         """
         Create a mask for where the sequences are and move sequences to continous array
         """
@@ -125,17 +167,6 @@ class OneLineFastaParser2bit(OneLineFastaParser):
         seq = np.empty(m-d+32, dtype=array.dtype)
         seq[:m] = array[mask]
         return Sequences(seq, new_intervals[0], new_intervals[1])
-
-    def _mask_and_move_sequences__(self, array, sequence_starts, sequence_ends):
-        """
-        Create a mask for where the sequences are and move sequences to continous array
-        """
-        start_idxs = sequence_starts // 4
-        end_idxs = sequence_ends // 4
-        mask = get_mask_from_intervals((sequence_starts, sequence_ends), array.size)
-        removed_areas = np.cumsum(sequence_starts-np.insert(sequence_ends[:-1], 0, 0))
-        new_intervals = (sequence_starts-removed_areas, sequence_ends-removed_areas)
-        return Sequences(array[mask], new_intervals[0], new_intervals[1])
 
 
 class FastaParser(TextParser):
@@ -173,63 +204,6 @@ class FastaParser(TextParser):
         self._last_header_idx = new_lines[is_header][-1]+1
         intervals = (np.insert(beginnings, 0, 0), np.append(beginnings, np.count_nonzero(~mask[:self._last_header_idx])))
         return Sequences(array[:self._last_header_idx][~mask[:self._last_header_idx]], intervals)
-
-
-class KmerHash:
-    CODES = np.zeros(256, dtype=np.uint64)
-    CODES[[97, 65]] = 0
-    CODES[[99, 67]] = 1
-    CODES[[116, 84]] = 2
-    CODES[[103, 71]] = 3
-
-    def __init__(self, k=31):
-        self.k=k
-        self.POWER_ARRAY = np.power(4, np.arange(k, dtype=np.uint64), dtype=np.uint64)
-        self.REV_POWER_ARRAY = np.power(4, np.arange(k, dtype=np.uint64)[::-1], dtype=np.uint64)
-
-
-    def _to_text(self, seq):
-        return "".join(letters[n] for n in seq)
-
-    def get_mask(self, offsets, size):
-        """
-        k=3
-        offsets=[5, 9]
-        0123456789
-        ACGTTGATTCGGA
-        -----s---s---
-        ---          0
-         ---         1
-          ---        2
-           --x       3 = 5-k+1
-            -x-      4 
-             ---     5 = 5 
-              ---    6
-        """
-
-        mask_diffs = np.zeros(size+1, dtype="int")
-        mask_diffs[np.maximum(offsets-self.k+1, 0)] = 1
-        mask_diffs[np.minimum(offsets, size)] = -1
-        return np.cumsum(mask_diffs)[:-1]==0
-
-    def _get_kmers(self, seq):
-        return [self._to_text(seq[i:i+self.k]) for i in range(len(seq)-self.k+1)]
-
-    def _get_codes2(self, seq):
-        idxs = np.digitize((seq-65) % 32 , np.array([65, 71, 97, 103]), right=True)
-        return np.asarray(idxs^(idxs>>1), dtype=np.uint64)
-
-    def _get_codes(self, seq):
-        return self.CODES[seq]
-
-    def _join(self, kmers1, kmers2, mask):
-        return np.concatenate((kmers1[mask], kmers2[mask]))
-
-    def get_kmer_hashes(self, sequences):
-        codes = self._get_codes(sequences.sequences)
-        assert codes.dtype==np.uint64, codes.dtype
-        kmers = np.convolve(codes, self.POWER_ARRAY, mode="valid")
-        reverse_kmers = np.convolve((codes+2) % 4, self.REV_POWER_ARRAY, mode="valid")
-        # mask = self.get_mask(sequences.offsets, kmers.size)
-        mask = get_kmer_mask((sequences.intervals_start, sequences.intervals_end), sequences.sequences.size, k=self.k)
-        return kmers, reverse_kmers, mask # [mask], reverse_kmers[mask]
+    
+    
+    

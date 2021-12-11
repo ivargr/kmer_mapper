@@ -1,23 +1,13 @@
 from itertools import product
 import numpy as np
 
-from .parser import get_kmer_mask
-
-
-class TwoBitEncoding:
-    pass
-
-
 class ACTGTwoBitEncoding:
     letters = ["A", "C", "T", "G"]
     bitcodes = ["00", "01", 
                 "10", "11"]
     reverse = np.array([1, 3, 20, 7], dtype=np.uint8)
     _lookup_2bytes_to_4bits = np.zeros(256*256, dtype=np.uint8)
-
-    for c1, c2 in product([0, 1, 2, 3], repeat=2):
-        idx = reverse[c1]*256+reverse[c2]
-        _lookup_2bytes_to_4bits[idx] = c1*4+c2
+    _lookup_2bytes_to_4bits[256*reverse[np.arange(4)[:, None]]+reverse[np.arange(4)]] = np.arange(4)[:, None]*4+np.arange(4)
     _shift_4bits = (4*np.arange(2, dtype=np.uint8))
     _shift_2bits = 2*np.arange(4, dtype=np.uint8)
 
@@ -62,8 +52,6 @@ class ACTGTwoBitEncoding:
         bit_mask = np.uint8(3) # last two bits
         all_bytes = (sequence[:, None]>>cls._shift_2bits) & bit_mask
         return cls.reverse[all_bytes.flatten()]+96
-
-
 
 
 class SimpleEncoding(ACTGTwoBitEncoding):
