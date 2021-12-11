@@ -1,4 +1,5 @@
 from shared_memory_wrapper import SingleSharedArray, to_shared_memory, from_shared_memory
+import gzip
 import numpy as np
 
 from .sequences import Sequences
@@ -15,8 +16,13 @@ def get_mask_from_intervals(intervals, size):
 
 class TextParser:
     _encoding = BaseEncoding
+    def _get_file_obj(self, filename):
+        if filename.endswith(".gz"):
+            return gzip.open(filename, "rb")
+        return open(filename, "rb")
+
     def __init__(self, filename, chunk_size=1000000):
-        self._file_obj = open(filename, "rb")
+        self._file_obj = self._get_file_obj(filename)
         self._chunk_size = chunk_size
         self._is_finished = False
         self._last_header_idx = -1
@@ -186,6 +192,3 @@ class FastaParser(TextParser):
         self._last_header_idx = new_lines[is_header][-1]+1
         intervals = (np.insert(beginnings, 0, 0), np.append(beginnings, np.count_nonzero(~mask[:self._last_header_idx])))
         return Sequences(array[:self._last_header_idx][~mask[:self._last_header_idx]], intervals)
-    
-    
-    
