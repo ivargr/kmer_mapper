@@ -1,10 +1,9 @@
 from kmer_mapper.encodings import ACTGTwoBitEncoding
-from kmer_mapper.encodings import SimpleEncoding, TwoBitHash, twobit_swap, TwoBitSequences, SimpleTwoBitHash, VerySimpleTwoBitHash, FastTwoBitHash
+from kmer_mapper.encodings import SimpleEncoding,  twobit_swap, TwoBitSequences
+from kmer_mapper.kmers import TwoBitHash
 from kmer_mapper.parser import Sequences, KmerHash
 import numpy as np
 Encoding = ACTGTwoBitEncoding
-# SimpleEncoding
-TwoBitHash=FastTwoBitHash
 def test_simple():
     sequence = np.array([97, 99, 116, 103], dtype="uint8")
     bits = np.unpackbits(Encoding.from_bytes(sequence))
