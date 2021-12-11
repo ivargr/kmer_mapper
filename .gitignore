@@ -16,3 +16,6 @@ kmer_mapper/cython_chain_genotyper.c
 *.html
 *.shm
 *.tmp
+#*
+*#
+*~

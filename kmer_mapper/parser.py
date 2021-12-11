@@ -21,6 +21,7 @@ def get_kmer_mask(intervals, size, k=31):
 
 class Sequences:
     def __init__(self, sequences, intervals_start, intervals_end):
+        assert intervals_start.size == intervals_end.size
         self.sequences = sequences
         self.offsets = intervals_start[1:]
         self.intervals_start = intervals_start
@@ -42,7 +43,7 @@ class Sequences:
 
 
 class TextParser:
-    def __init__(self, filename, chunk_size=100):
+    def __init__(self, filename, chunk_size=1000000):
         self._file_obj = open(filename, "rb")
         self._chunk_size = chunk_size
         self._is_finished = False
@@ -93,6 +94,7 @@ class OneLineFastaParser(TextParser):
 
         # Find which lines are sequences, and cut the array so that it ends with a complete sequence
         is_sequence_line = array[new_lines[:-1]+1] != self.HEADER
+        # assert np.any(is_sequence_line), (array, self._is_finished)
         idx_last_sequence_line = np.flatnonzero(is_sequence_line)[-1]
         new_lines = new_lines[:idx_last_sequence_line+2]
         is_sequence_line = is_sequence_line[:idx_last_sequence_line+1]
@@ -112,6 +114,19 @@ class OneLineFastaParser(TextParser):
 
 class OneLineFastaParser2bit(OneLineFastaParser):
     def _mask_and_move_sequences(self, array, sequence_starts, sequence_ends):
+        """
+        Create a mask for where the sequences are and move sequences to continous array
+        """
+        mask = get_mask_from_intervals((sequence_starts, sequence_ends), array.size)
+        removed_areas = np.cumsum(sequence_starts-np.insert(sequence_ends[:-1], 0, 0))
+        new_intervals = (sequence_starts-removed_areas, sequence_ends-removed_areas)
+        m = np.sum(mask)
+        d = m%32
+        seq = np.empty(m-d+32, dtype=array.dtype)
+        seq[:m] = array[mask]
+        return Sequences(seq, new_intervals[0], new_intervals[1])
+
+    def _mask_and_move_sequences__(self, array, sequence_starts, sequence_ends):
         """
         Create a mask for where the sequences are and move sequences to continous array
         """
@@ -215,40 +230,6 @@ class KmerHash:
         assert codes.dtype==np.uint64, codes.dtype
         kmers = np.convolve(codes, self.POWER_ARRAY, mode="valid")
         reverse_kmers = np.convolve((codes+2) % 4, self.REV_POWER_ARRAY, mode="valid")
-        mask = self.get_mask(sequences.offsets, kmers.size)
+        # mask = self.get_mask(sequences.offsets, kmers.size)
+        mask = get_kmer_mask((sequences.intervals_start, sequences.intervals_end), sequences.sequences.size, k=self.k)
         return kmers, reverse_kmers, mask # [mask], reverse_kmers[mask]
-
-def simulate_fasta(n_seqs, seq_len, filename):
-    f = open(filename, "w")
-    for i in range(n_seqs):
-        seq = "".join(letters[n] for n in np.random.randint(0, 4, seq_len))
-        f.write(f">h{i}\n{seq}\n")
-    f.close()
-
-def main(filename, chunk_size=500*10**5, do_print=False):
-    parser = OneLineFastaParser(filename, chunk_size)
-    for i, seqs in enumerate(parser.parse()):
-        if do_print:
-            for i in range(len(seqs)):
-                print(to_text(seqs[i]))
-        # print(f"Parsing chunk {i}")
-        kmers = KmerHash(3).get_kmer_hashes(seqs)
-
-if __name__ == "__main__":
-    import sys
-    import cProfile
-    #simulate_fasta(10, 20, "small.fa")
-    #cProfile.run('main("large.fa")')
-    # exit()
-    main(sys.argv[1], int(sys.argv[2]), do_print=True)
-    exit()
-    # for seqs in :# parse_fasta(, 100):
-    #     print(seqs)
-    #     kmers = KmerHash(3).get_kmer_hashes(seqs)
-    #     continue
-    #     t, starts = (seqs.sequencegs, seqs.offsets)
-    #     print(to_text(t), starts)
-    #     print("<", to_text(t[:starts[0]]))
-    #     for s,e in zip(starts[:-1], starts[1:]):
-    #         print("-", to_text(t[s:e]))
-    #     print(">", to_text(t[starts[-1]:]))

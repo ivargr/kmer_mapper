@@ -1,5 +1,5 @@
 import logging
-
+from .encodings import twobit_swap, ACTGTwoBitEncoding
 import numpy as np
 
 
@@ -24,6 +24,8 @@ class KmerLookup:
         return cls(data["kmers"],
                    data["representative_kmers"],
                    data["lookup"])
+
+
 
     def index_kmers(self):
         self._kmers.sort()
@@ -92,9 +94,36 @@ class Advanced2(AdvancedKmerLookup):
                  index=self._indexed_lookup._index,
                  mod=self._indexed_lookup._mod,
                  row_size=self._indexed_lookup._row_sizes)
-                 
+    
 
-                 
+class NewHashLookup(Advanced2):
+    dtype=np.uint64
+    k=31
+    @classmethod
+    def _rehash_kmers(cls, kmers):
+        new_hashes = twobit_swap(kmers)>>cls.dtype(2)
+        reverse_hashes = ACTGTwoBitEncoding.complement(kmers) & cls.dtype(4**cls.k-1)
+        return np.concatenate((new_hashes, reverse_hashes))
+
+    @classmethod
+    def from_lookup_with_old_hash(cls, old_lookup):
+        kmers = cls._rehash_kmers(old_lookup._representative_kmers)
+        nodes = np.concatenate((old_lookup._lookup, old_lookup._lookup))
+        ret = cls(np.unique(kmers), kmers, nodes)
+        ret.index_kmers()
+        return ret
+
+    @classmethod
+    def from_old_index_files(cls, filename):
+        logging.info("From old index files")
+        data = np.load(filename)
+        kmers = cls._rehash_kmers(data["kmers"])
+        unique_kmers = np.unique(kmers)
+        nodes = data["nodes"]
+        nodes = np.concatenate((nodes, nodes))
+        k = cls(unique_kmers, kmers, nodes)
+        k.index_kmers()
+        return k
 
 class IndexedSortedLookup(SimpleKmerLookup):
     def __init__(self, sorted_values, index, mod, row_sizes):
@@ -162,3 +191,4 @@ class IndexedSortedLookup(SimpleKmerLookup):
             L[~is_larger] = m[~is_larger]
         return L
 
+        
