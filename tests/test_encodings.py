@@ -1,9 +1,10 @@
 from kmer_mapper.encodings import ACTGTwoBitEncoding
-from kmer_mapper.encodings import SimpleEncoding, TwoBitHash, twobit_swap, TwoBitSequences
+from kmer_mapper.encodings import SimpleEncoding, TwoBitHash, twobit_swap, TwoBitSequences, SimpleTwoBitHash, VerySimpleTwoBitHash, FastTwoBitHash
 from kmer_mapper.parser import Sequences, KmerHash
 import numpy as np
 Encoding = ACTGTwoBitEncoding
 # SimpleEncoding
+TwoBitHash=FastTwoBitHash
 def test_simple():
     sequence = np.array([97, 99, 116, 103], dtype="uint8")
     bits = np.unpackbits(Encoding.from_bytes(sequence))
@@ -52,18 +53,20 @@ def test_hashing():
     k = 31
     dtype=np.uint64
     np.random.seed(100)
-    sequence = np.random.choice([97, 99, 116, 103, 65, 67, 71, 84], 256).astype(np.uint8)
+    sequence = np.random.choice([97, 99, 116, 103, 65, 67, 71, 84], 64).astype(np.uint8)
     _sequence = np.array([97, 99, 116, 103, 116, 65, 67, 67,
                          99, 99, 99, 65, 116, 116, 67, 67,
                          116, 99, 116, 67, 67, 65, 67, 103,
                          116, 103, 65, 65, 65, 65, 67, 103],
                         dtype="uint8")
     codes = SimpleEncoding.convert_byte_to_2bits(sequence)
-    power_array = 4**np.arange(k)[::-1]
+    power_array = 4**np.arange(k, dtype=np.uint64)[::-1]
     true_kmers = np.convolve(codes, power_array, mode="valid")
     bits = Encoding.from_bytes(sequence)
     h = TwoBitHash(k=k, dtype=dtype)
     kmers = h.np_get_kmers(bits.view(dtype))
+    print(kmers)
+    print(true_kmers)
     assert np.all(kmers==true_kmers)
 
 def test_twobit_swap():

@@ -106,11 +106,6 @@ class TwoBitSequences:
         return cls(twobit_sequences, intervals)
 
 class TwoBitHash:
-    first_2 = np.uint64(2**63+2**62)
-    last_31 = ~first_2
-    last_2 = np.uint64(3)
-    first_31 = ~last_2
-    
     def __init__(self, k=31, dtype=np.uint64):
         self._dtype = dtype
         n_bits_in_dtype=8*dtype(0).nbytes
@@ -144,13 +139,12 @@ class TwoBitHash:
 
     def np_get_kmers(self, sequence):
         assert sequence.dtype==self._dtype, sequence.dtype
-        print("##########>>>", [bin(s) for s in sequence])
         sequence = sequence.reshape(-1, 1, 1)
-        assert sequence.dtype==self._dtype, sequence.dtype
-        shifted = (sequence >> self._shifts) & ~self._move_to_mask
-        added = (sequence[1:] & self._move_from_mask) << self._moves
-        shifted[:-1] |= added
-        return ((shifted & self._masks)>>self._mask_shifts).flatten()[:self._n_letters_in_dtype*sequence.size-self.k+1]
+        shifted = (sequence >> self._shifts) # & ~self._move_to_mask
+        shifted[:-1] |= (sequence[1:] & self._move_from_mask) << self._moves
+        all_kmers = ((shifted & self._masks)>>self._mask_shifts)
+        n_kmers = self._n_letters_in_dtype*sequence.size-self.k+1
+        return all_kmers.ravel()[:n_kmers]
 
     def get_kmer_hashes(self, sequences):
         """Matching old interface"""
@@ -160,22 +154,86 @@ class TwoBitHash:
         reverse_hashes = sequences.encoding.complement(kmers) & self._dtype(4**self.k-1)
         return forward_hashes, reverse_hashes, mask
 
-    def get_kmers(self, sequence):
-        assert sequence.dtype==np.uint8, sequence.dtype
-        buffers = [sequences.copy(), np.empty_like(sequences)]
-        kmers = np.empty(sequence.size*31, dtype=np.uint64).reshape(32, -1)
-        kmers[0] = sequence
-        last_buffer = kmers[-1]
-        for i in range(32):
-            kmers[i+1] = kmers[i]<<2
-            kmers[i+1][:-1] |= kmers[i][1:] & self.first_2
-        hashes = kmers & last_31
+class SimpleTwoBitHash(TwoBitHash):
+    def __init__(self, k=31, dtype=np.uint64):
+        self._dtype = dtype
+        self.k = k
+        self._mask = dtype(4**k-1)
+        self._n_letters_in_dtype = 4*dtype(0).nbytes
+        self._shifts = dtype(2)*np.arange(self._n_letters_in_dtype, dtype=dtype)
+        self._move_from_mask = dtype(2)**self._shifts-dtype(1)
+        self._moves = self._shifts[::-1]+dtype(2)
+
+    def np_get_kmers(self, sequence):
+        assert sequence.dtype==self._dtype, sequence.dtype
+        sequence = sequence.reshape(-1, 1)
+        shifted = (sequence >> self._shifts)
+        shifted[:-1] |= (sequence[1:] & self._move_from_mask) << self._moves
+        all_kmers = (shifted & self._mask)
+        n_kmers = self._n_letters_in_dtype*sequence.size-self.k+1
+        return all_kmers.ravel()[:n_kmers]
+
+class VerySimpleTwoBitHash(TwoBitHash):
+    def __init__(self, k=31, dtype=np.uint64):
+        self._dtype = dtype
+        self.k = k
+        self._mask = dtype(4**k-1)
+        self._n_letters_in_dtype = 4*dtype(0).nbytes
+        self._shifts = dtype(2)*np.arange(self._n_letters_in_dtype, dtype=dtype)
+        self._rev_shifts = self._shifts[::-1]+dtype(2)
+
+    def np_get_kmers(self, sequence):
+        assert sequence.dtype==self._dtype, sequence.dtype
+        sequence = sequence.reshape(-1, 1)
+        shifted = (sequence[:-1] >> self._shifts) | (sequence[1:] << self._rev_shifts)
+        all_kmers = np.append(shifted, sequence[-1]>>(self._dtype(2)*np.arange(1+self._n_letters_in_dtype-self.k, dtype=self._dtype)))  & self._mask
+        n_kmers = self._n_letters_in_dtype*sequence.size-self.k+1
+        assert all_kmers.size >= n_kmers, (all_kmers.size, n_kmers)
+        return all_kmers.ravel()[:n_kmers]
+
+    def np_get_kmers_with_buffer(self, sequence):
+        return self._mask & (sequence[:-1, None] >> self._shifts) | (sequence[1:, None] << self._rev_shifts)
+
+
+    def get_kmer_hashes(self, sequences):
+        """Matching old interface"""
+        last_end = sequences.intervals[1][-1]
+        if sequences.sequences.size*4- last_end>=self._n_letters_in_dtype-self.k+1:
+            mask = get_kmer_mask(sequences.intervals, last_end, self.k)
+            kmers = self.np_get_kmers_with_buffer(sequences.sequences.view(self._dtype))[:mask.size]
+            reverse_hashes = sequences.encoding.complement(kmers) & self._dtype(4**self.k-1)
+            forward_hashes = twobit_swap(kmers) >> ((self._n_letters_in_dtype-self.k)*2)
+            return forward_hashes, reverse_hashes, mask
+        else:
+            return super().get_kmer_hashes(sequences)
+
+class FastTwoBitHash(VerySimpleTwoBitHash):
+    def np_get_kmers(self, sequence):
+        assert sequence.dtype==self._dtype, sequence.dtype
+        result = (sequence[:, None] >> self._shifts)
+        result[:-1] |= (sequence[1:, None] << self._rev_shifts)
+        result &= self._mask
+        n_kmers = self._n_letters_in_dtype*sequence.size-self.k+1
+        return result.ravel()[:n_kmers]
+
+    def get_new_kmer_hashes(self, sequences):
+        last_end = sequences.intervals[1][-1]
+        mask = get_kmer_mask(sequences.intervals, last_end, self.k)
+        if sequences.sequences.size*4- last_end>=self._n_letters_in_dtype-self.k+1:
+            kmers = self.np_get_kmers_with_buffer(sequences.sequences.view(self._dtype)).ravel()
+        else: 
+            kmers = self.np_get_kmers(sequences.sequences.view(self._dtype))
+        return kmers[:mask.size][mask] & self._mask
+
+    def np_get_kmers_with_buffer(self, sequence):
+        res = (sequence[:-1, None] >> self._shifts)
+        res |= (sequence[1:, None] << self._rev_shifts)
+        return res
 
 def simple_hash(s, k):
     codes = SimpleEncoding.convert_byte_to_2bits(
         np.array([ord(c) for c in s], dtype=np.uint8))
     power_array = 4**np.arange(k)[::-1]
-    print("->", np.sum(power_array*codes[:power_array.size]))
     return np.convolve(codes, power_array, mode="valid")
 
 def twobit_swap(number):
