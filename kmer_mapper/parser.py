@@ -48,7 +48,7 @@ class TextParser:
                     yield chunk
 
     def _handle_chunk(self, chunk):
-        self.get_sequences(chunk)
+        return self.get_sequences(chunk)
 
     def parse_chunk(self):
         a, bytes_read = self.read_raw_chunk()
