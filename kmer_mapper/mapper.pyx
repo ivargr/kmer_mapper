@@ -152,13 +152,13 @@ def read_fasta_into_chunks(filename, chunk_size=1000, int max_read_length=150, w
 @cython.wraparound(False)
 def map_kmers_to_graph_index(index, int max_node_id, np.uint64_t[:] kmers, int max_index_lookup_frequency=1000):
 
+    t = time.perf_counter()
     # index arrays
     cdef np.int64_t[:] hashes_to_index = index._hashes_to_index
     cdef np.uint32_t[:] n_kmers = index._n_kmers
     cdef np.uint32_t[:] nodes = index._nodes
-    cdef np.uint64_t[:] ref_offsets = index._ref_offsets
     cdef np.uint64_t[:] index_kmers = index._kmers
-    cdef np.uint16_t[:] index_frequencies = index._frequencies
+    cdef np.uint16_t[:] index_frequencies = index._frequencies.data
 
     cdef int n_local_hits
     cdef unsigned long index_position
@@ -168,17 +168,18 @@ def map_kmers_to_graph_index(index, int max_node_id, np.uint64_t[:] kmers, int m
     cdef int modulo = index._modulo
     #logging.info("Hash modulo is %d. Max index lookup frequency is %d." % (modulo, max_index_lookup_frequency))
 
-    cdef np.ndarray[np.float_t] node_counts = np.zeros(max_node_id+1, dtype=np.float)
-    #cdef np.float_t[:] node_counts = np.zeros(max_node_id+1, dtype=np.float)
+    cdef np.ndarray[np.uint32_t] node_counts = np.zeros(max_node_id+1, dtype=np.uint32)
+    cdef np.uint32_t[:] node_counts_view = node_counts
 
-    t = time.time()
+    t = time.perf_counter()
     cdef np.uint64_t[:] kmer_hashes = np.mod(kmers, modulo)
-    #logging.info("Time spent taking modulo: %.4f" % (time.time()-t))
-    t = time.time()
+    logging.info("Time spent taking modulo: %.4f" % (time.perf_counter()-t))
     cdef int n_collisions = 0
     cdef int n_kmers_mapped = 0
     cdef int n_skipped_high_frequency = 0
     cdef int n_no_index_hits = 0
+    logging.info("Time initing mapper: %.7f" % (time.perf_counter()-t))
+    t = time.perf_counter()
     #logging.info("Will process %d kmers" % kmers.shape[0])
     for i in range(kmers.shape[0]):
         hash = kmer_hashes[i]
@@ -187,8 +188,9 @@ def map_kmers_to_graph_index(index, int max_node_id, np.uint64_t[:] kmers, int m
             continue
 
         n_local_hits = n_kmers[hash]
-        if n_local_hits == 0:
+        if n_local_hits == 0 or n_local_hits > max_index_lookup_frequency:
             n_no_index_hits += 1
+
 
         index_position = hashes_to_index[hash]
 
@@ -202,15 +204,15 @@ def map_kmers_to_graph_index(index, int max_node_id, np.uint64_t[:] kmers, int m
             if index_frequencies[l] > max_index_lookup_frequency:
                 n_skipped_high_frequency += 1
                 continue
-            node_counts[nodes[l]] += 1
+
+            node_counts_view[nodes[l]] += 1
             n_kmers_mapped += 1
 
-    logging.info("Time spent looking up kmers in index: %.3f" % (time.time()-t))
+    logging.info("Time spent looking up kmers in index: %.3f" % (time.perf_counter()-t))
     #logging.info("N kmers with no index hits: %d" % n_no_index_hits)
     #logging.info("N hash collisions: %d" % n_collisions)
     #logging.info("N skipped because too high frequency: %d" % n_skipped_high_frequency)
-    #logging.info("N kmers mapped: %d" % n_kmers_mapped)
+    logging.info("N kmers mapped: %d" % n_kmers_mapped)
     return node_counts
 
 
-    
