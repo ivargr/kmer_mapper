@@ -27,6 +27,10 @@ class TextParser:
         self._is_finished = False
         self._last_header_idx = -1
 
+    def _cut_array(self, array, last_newline):
+        self._last_header_idx = last_newline+1
+        return array[:last_newline]
+
     def read_raw_chunk(self):
         array = np.empty(self._chunk_size, dtype="uint8")
         bytes_read = self._file_obj.readinto(array)
@@ -43,6 +47,9 @@ class TextParser:
                 else:
                     yield chunk
 
+    def _handle_chunk(self, chunk):
+        self.get_sequences(chunk)
+
     def parse_chunk(self):
         a, bytes_read = self.read_raw_chunk()
         self._is_finished = bytes_read < self._chunk_size
@@ -50,7 +57,7 @@ class TextParser:
             return None
         if self._is_finished  and a[bytes_read-1] != NEWLINE:
             a[bytes_read]  = NEWLINE
-        sequences = self.get_sequences(a[:bytes_read])
+        sequences = self._handle_chunk(a[:bytes_read])
         if not self._is_finished:
             self._file_obj.seek(self._last_header_idx-self._chunk_size, 1)
         return sequences
@@ -58,7 +65,7 @@ class TextParser:
 class OneLineParser(TextParser):
     """
     Base class for formats where the sequnences
-    are contained to sinlge line
+    are constrained to sinlge line
     """
     _buffer_divisor=1
 
@@ -68,10 +75,6 @@ class OneLineParser(TextParser):
         sequence_starts = new_lines[::self.n_lines_per_entry]+1
         sequence_ends = new_lines[1::self.n_lines_per_entry]
         return self._mask_and_move_sequences(chunk, sequence_starts, sequence_ends)
-
-    def _cut_array(self, array, last_newline):
-        self._last_header_idx = last_newline+1
-        return array[:last_newline]
 
     def _mask_and_move_sequences(self, array, sequence_starts, sequence_ends):
         """
