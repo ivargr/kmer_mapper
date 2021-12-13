@@ -4,11 +4,8 @@ import numpy as np
 cimport numpy as np
 import logging
 import time
-from kmer_mapper import util
 cimport cython
-import SharedArray as sa
 from graph_kmer_index.shared_mem import to_shared_memory, SingleSharedArray
-import sys
 
 def py_read_file(filename):
     with open(filename, "r") as f:

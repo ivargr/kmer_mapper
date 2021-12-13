@@ -1,5 +1,5 @@
-from kmer_mapper.mapping import get_kmers_from_fasta 
-from kmer_mapper.mapper import map_kmers_to_graph_index
+from kmer_mapper.mapping import get_kmers_from_fasta
+from kmer_mapper import map_kmers_to_graph_index
 from graph_kmer_index import sequence_to_kmer_hash, letter_sequence_to_numeric
 from graph_kmer_index.read_kmers import ReadKmers
 from Bio import Seq

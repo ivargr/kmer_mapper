@@ -172,7 +172,7 @@ def map_fasta_single_thread(data):
 
     shared_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
 
-   cls = KmerIndex
+    cls = KmerIndex
     if "minimal" in args.kmer_index:
         cls = MinimalKmerIndex
 

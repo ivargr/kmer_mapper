@@ -8,14 +8,19 @@ def test():
     new_index = Advanced2.from_old_index_files("kmer_index_only_variants.npz")
     kmers = old_index._kmers
 
+    i = 1000
+
     for kmer in kmers:
         old_hits = old_index.get(int(kmer), max_hits=1000000000)[0]
         kmer = np.array([kmer], dtype=np.uint64)
         new_hits = np.nonzero(new_index.get_node_counts(kmer))[0]
 
-        print(kmer, old_hits, new_hits)
+        #print(kmer, old_hits, new_hits)
 
         assert set(old_hits) == set(new_hits), "Fail for kmer %d" % kmer
 
 
+        i += 1
+        if i > 1000:
+            break
 test()

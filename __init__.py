@@ -1,1 +1,0 @@
-from kmer_mapper.mapper import sum_test
