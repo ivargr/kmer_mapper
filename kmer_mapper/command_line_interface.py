@@ -70,12 +70,12 @@ def run_argument_parser(args):
     subparser.add_argument("-t", "--n-threads", required=False, default=16, type=int)
     subparser.add_argument("-c", "--chunk-size", required=False, type=int, default=500000, help="N reads to process in each chunk")
     subparser.add_argument("-n", "--use-numpy", required=False, type=bool, default=False, help="Use numpy-based counting instead of Cython")
-    subparser.add_argument("-N", "--use-numpy-file-reading", required=False, type=bool, default=False, help="Use numpy-based file reading instead of Cython")
+    subparser.add_argument("-N", "--use-cython-file-reading", required=False, type=bool, default=False, help="Use cython-based file reading instead of Cython")
     subparser.add_argument("-m", "--no-shared-memory", required=False, type=bool, default=False, help="Set to True to not use shared memory for index. Increases memory usage by a factor of --n-threads.")
     subparser.add_argument("-l", "--max-read-length", required=False, type=int, default=150,
                            help="Maximum length of reads. Reads should not be longer than this.")
     subparser.add_argument("-o", "--output-file", required=True)
-    subparser.add_argument("-r", "--ignore-reverse-complement", required=False, default=False, type=bool)
+    subparser.add_argument("-r", "--include-reverse-complement", required=False, default=False, type=bool)
     subparser.add_argument("-I", "--max-hits-per-kmer", required=False, default=1000, type=int,
                            help="Ignore kmers that have more than this amount of hits in index")
     subparser.set_defaults(func=map_fasta_command)

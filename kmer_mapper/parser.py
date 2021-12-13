@@ -1,3 +1,5 @@
+import time
+import logging
 from shared_memory_wrapper import SingleSharedArray, to_shared_memory, from_shared_memory
 import numpy as np
 HEADER = 62
@@ -51,7 +53,9 @@ class TextParser:
 
     def parse(self, as_shared_memory_object=False):
         while not self._is_finished:
+            t = time.perf_counter()
             chunk = self.parse_chunk()
+            logging.info("Time to parse chunk: %.4f" % (time.perf_counter()-t))
             if chunk is not None:
                 if as_shared_memory_object:
                     shared_memory_name = str(np.random.randint(0, 10e15))
@@ -191,12 +195,16 @@ class KmerHash:
     def _join(self, kmers1, kmers2, mask):
         return np.concatenate((kmers1[mask], kmers2[mask]))
 
-    def get_kmer_hashes(self, sequences):
+    def get_kmer_hashes(self, sequences, include_reverse_complements=True):
         codes = self._get_codes(sequences.sequences)
         assert codes.dtype==np.uint64, codes.dtype
         kmers = np.convolve(codes, self.POWER_ARRAY, mode="valid")
-        reverse_kmers = np.convolve((codes+2) % 4, self.REV_POWER_ARRAY, mode="valid")
         mask = self.get_mask(sequences.offsets, kmers.size)
+        reverse_kmers = None
+
+        if include_reverse_complements:
+            reverse_kmers = np.convolve((codes+2) % 4, self.REV_POWER_ARRAY, mode="valid")
+
         return kmers, reverse_kmers, mask # [mask], reverse_kmers[mask]
 
 def simulate_fasta(n_seqs, seq_len, filename):
