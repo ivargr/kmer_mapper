@@ -21,5 +21,5 @@ class Sequences:
         return self.sequences[start:end]
 
     def __repr__(self):
-        return "Seqs(%s, %s)" % (to_text(self.sequences), self.intervals)
+        return "Seqs(%s, %s)" % (str(self.sequences), self.intervals)
 

@@ -24,7 +24,7 @@ setup(name='kmer_mapper',
       license='MIT',
       packages=["kmer_mapper"],
       zip_safe=False,
-      install_requires=['numpy', 'cython', 'graph_kmer_index>=0.0.10', 'pathos', 'scipy', 'pandas', 'shared_memory_wrapper'],
+      install_requires=['numpy', 'cython', 'graph_kmer_index>=0.0.10', 'pathos', 'scipy', 'pandas', 'shared_memory_wrapper>=0.0.4'],
       classifiers=[
             'Programming Language :: Python :: 3'
       ],

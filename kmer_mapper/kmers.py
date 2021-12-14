@@ -57,7 +57,7 @@ class TwoBitHash:
         return kmers.ravel()[:mask.size][mask] & self._mask
 
     def get_kmer_hashes(self, sequences):
-        return ACTGTwoBitEncoding.complement(self.get_kmer_hashes(sequence))>>2
+        return ACTGTwoBitEncoding.complement(self.get_new_kmer_hashes(sequences))>>2
 
 class KmerHash:
     CODES = np.zeros(256, dtype=np.uint64)
