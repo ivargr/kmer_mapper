@@ -1,5 +1,6 @@
 import time
 import logging
+import sys
 from shared_memory_wrapper import SingleSharedArray, to_shared_memory, from_shared_memory
 import numpy as np
 HEADER = 62
@@ -41,7 +42,7 @@ class Sequences:
 
 class TextParser:
     def __init__(self, filename, chunk_size=100):
-        self._file_obj = open(filename, "rb")
+        self._file_obj = open(filename, "rb")   # if filename != "-" else sys.stdin.buffer
         self._chunk_size = chunk_size
         self._is_finished = False
         self._last_header_idx = -1

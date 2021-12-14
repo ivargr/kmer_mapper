@@ -32,7 +32,8 @@ def map_fasta_command(args):
         sys.exit(1)
 
     if not args.fasta_file.endswith(".fa"):
-        logging.error("Only fasta files (not fq or gzipped files) are supported for now.")
+        logging.error("Only fasta files (not fq or gzipped files) are supported to the argument -f. If you have another"
+                          "format, you can pipe fasta to kmer_mapper and use a dash as file name (-f -)")
         sys.exit(1)
 
 

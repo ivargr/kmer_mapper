@@ -8,7 +8,7 @@ pip install kmer_mapper
 ```
 
 ### Usage
+Kmer mapper needs a two-line fasta. 
 ```bash
 kmer_mapper map -i kmer_index.npz -f reads.fa -o results --n-threads 10
 ```
-
