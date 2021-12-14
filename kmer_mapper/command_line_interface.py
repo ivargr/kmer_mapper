@@ -13,7 +13,7 @@ import time
 from graph_kmer_index.index_bundle import IndexBundle
 from .kmer_counting import SimpleKmerLookup
 from .kmer_lookup import Advanced2
-from .parser import OneLineFastaParser, KmerHash, Sequences
+from .parser import OneLineFastaParser, Sequences
 from shared_memory_wrapper import from_shared_memory, to_shared_memory, SingleSharedArray
 from shared_memory_wrapper.shared_memory import remove_shared_memory_in_session
 from pathos.multiprocessing import Pool
@@ -78,6 +78,7 @@ def run_argument_parser(args):
                            help="Maximum length of reads. Reads should not be longer than this.")
     subparser.add_argument("-o", "--output-file", required=True)
     subparser.add_argument("-r", "--include-reverse-complement", required=False, default=False, type=bool)
+    subparser.add_argument("-T", "--use-two-bit-parsing", required=False, default=False, type=bool)
     subparser.add_argument("-I", "--max-hits-per-kmer", required=False, default=1000, type=int,
                            help="Ignore kmers that have more than this amount of hits in index")
     subparser.set_defaults(func=map_fasta_command)

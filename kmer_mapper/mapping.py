@@ -11,7 +11,8 @@ from shared_memory_wrapper import from_shared_memory, to_shared_memory, SingleSh
 from pathos.multiprocessing import Pool
 from itertools import repeat
 from graph_kmer_index.collision_free_kmer_index import MinimalKmerIndex
-from .parser import OneLineFastaParser, Sequences, KmerHash
+from .parser import OneLineFastaParser, Sequences, OneLineFastaParser2bit
+from .kmers import KmerHash, TwoBitHash
 
 
 def get_reads_as_matrices(read_file_name, chunk_size=500000, max_read_length=150):
@@ -138,16 +139,23 @@ def map_fasta_single_thread_with_numpy_parsing(data):
     node_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
     logging.info("Done reading from shared memory")
     t = time.perf_counter()
-    hashes, reverse_complement_hashes, mask = KmerHash(k=31).get_kmer_hashes(sequence_chunk, args.include_reverse_complement)
-    logging.info("time to get %d kmer hashes using new numpy: %.3f" % (len(hashes), time.perf_counter()-t))
-    for h in (hashes, reverse_complement_hashes):
-        if h is None:
-            logging.info("Skipping hashing (reverse complement)")
-            continue
-        h = h[mask]
+    if args.use_two_bit_parsing:
+        hashes = TwoBitHash(k=31).get_kmer_hashes(sequence_chunk, args.include_reverse_complement)
+        logging.info("time to get %d kmer hashes using new numpy: %.3f" % (len(hashes), time.perf_counter() - t))
         t = time.perf_counter()
-        node_counts += map_kmers_to_graph_index(kmer_index, args.n_nodes, h, args.max_hits_per_kmer)
-        logging.info("Done mapping to kmer index. Took %.3f sec" % (time.perf_counter()-t))
+        node_counts += map_kmers_to_graph_index(kmer_index, args.n_nodes, hashes, args.max_hits_per_kmer)
+        logging.info("Done mapping to kmer index. Took %.3f sec" % (time.perf_counter() - t))
+    else:
+        hashes, reverse_complement_hashes, mask = KmerHash(k=31).get_kmer_hashes(sequence_chunk, args.include_reverse_complement)
+        logging.info("time to get %d kmer hashes using new numpy: %.3f" % (len(hashes), time.perf_counter()-t))
+        for h in (hashes, reverse_complement_hashes):
+            if h is None:
+                logging.info("Skipping hashing (reverse complement)")
+                continue
+            h = h[mask]
+            t = time.perf_counter()
+            node_counts += map_kmers_to_graph_index(kmer_index, args.n_nodes, h, args.max_hits_per_kmer)
+            logging.info("Done mapping to kmer index. Took %.3f sec" % (time.perf_counter()-t))
 
     logging.info("Done with chunk. Took %.3f sec" % (time.perf_counter()-time_start))
 
@@ -221,7 +229,12 @@ def map_fasta(args, kmer_index):
 
     to_shared_memory(SingleSharedArray(node_counts), "counts_shared" + args.random_id)
 
-    if not args.use_cython_file_reading:
+    if args.use_two_bit_parsing:
+        logging.info("Using two bit fasta parser")
+        fasta_parser = OneLineFastaParser2bit(args.fasta_file, args.chunk_size * 130)
+        reads = fasta_parser.parse(as_shared_memory_object=True)
+        func = map_fasta_single_thread_with_numpy_parsing
+    elif not args.use_cython_file_reading:
         logging.info("Using numpy fasta parser")
         fasta_parser = OneLineFastaParser(args.fasta_file, args.chunk_size * 130)
         reads = fasta_parser.parse(as_shared_memory_object=True)
