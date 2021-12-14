@@ -1,6 +1,6 @@
 import numpy as np
 from .parser import get_mask_from_intervals
-from .encodings import twobit_swap
+from .encodings import twobit_swap, ACTGTwoBitEncoding
 
 def get_kmer_mask(intervals, size, k=31):
     starts, ends = intervals
@@ -17,7 +17,7 @@ class TwoBitHash:
         self._shifts = dtype(2)*np.arange(self._n_letters_in_dtype, dtype=dtype)
         self._rev_shifts = self._shifts[::-1]+dtype(2)
 
-    def get_kmer_hashes(self, sequences):
+    def _get_kmer_hashes(self, sequences):
         """Matching old interface"""
         last_end = sequences.intervals[1][-1]
         mask = get_kmer_mask(sequences.intervals, last_end, self.k)
@@ -56,6 +56,8 @@ class TwoBitHash:
         kmers = func(sequences.sequences.view(self._dtype))
         return kmers.ravel()[:mask.size][mask] & self._mask
 
+    def get_kmer_hashes(self, sequences):
+        return ACTGTwoBitEncoding.complement(self.get_kmer_hashes(sequence))>>2
 
 class KmerHash:
     CODES = np.zeros(256, dtype=np.uint64)
