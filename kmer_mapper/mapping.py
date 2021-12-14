@@ -140,7 +140,7 @@ def map_fasta_single_thread_with_numpy_parsing(data):
     logging.info("Done reading from shared memory")
     t = time.perf_counter()
     if args.use_two_bit_parsing:
-        hashes = TwoBitHash(k=31).get_kmer_hashes(sequence_chunk, args.include_reverse_complement)
+        hashes = TwoBitHash(k=31).get_kmer_hashes(sequence_chunk)
         logging.info("time to get %d kmer hashes using new numpy: %.3f" % (len(hashes), time.perf_counter() - t))
         t = time.perf_counter()
         node_counts += map_kmers_to_graph_index(kmer_index, args.n_nodes, hashes, args.max_hits_per_kmer)
@@ -233,6 +233,7 @@ def map_fasta(args, kmer_index):
         logging.info("Using two bit fasta parser")
         fasta_parser = OneLineFastaParser2bit(args.fasta_file, args.chunk_size * 130)
         reads = fasta_parser.parse(as_shared_memory_object=True)
+        print(next(reads))
         func = map_fasta_single_thread_with_numpy_parsing
     elif not args.use_cython_file_reading:
         logging.info("Using numpy fasta parser")
