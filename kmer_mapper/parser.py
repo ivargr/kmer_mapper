@@ -38,16 +38,16 @@ class FileBuffer:
         new_intervals = (starts-removed_areas, ends-removed_areas)
         m = np.sum(mask)
         d = m % self._buffer_divisor
-        seq = np.empty(m-d+self._buffer_divisor, dtype=array.dtype)
+        seq = np.empty(m-d+self._buffer_divisor, dtype=self._data.dtype)
         seq[:m] = self._data[mask]
         return seq, new_intervals
 
     def validate_if_not(self):
-        if not self._is_validated():
+        if not self._is_validated:
             self._validate()
 
 
-class OnlineBuffer(FileBuffer):
+class OneLineBuffer(FileBuffer):
     n_lines_per_entry = 2
     _encoding = BaseEncoding
 
@@ -55,33 +55,40 @@ class OnlineBuffer(FileBuffer):
     def from_raw_buffer(cls, chunk):
         new_lines = np.flatnonzero(chunk==NEWLINE)
         n_lines = new_lines.size
-        assert n_lines >= self.n_lines_per_entry, "No complete entry in buffer"
-        new_lines = new_lines[:n_lines-(n_lines%self.n_lines_per_entry)]
+        assert n_lines >= cls.n_lines_per_entry, "No complete entry in buffer"
+        new_lines = new_lines[:n_lines-(n_lines%cls.n_lines_per_entry)]
         return cls(chunk[:new_lines[-1]+1], new_lines)
 
-class OneLineFastaBuffer(OneLineParser):
-    HEADER= 62
-    n_lines_per_entry = 2
-
-class FastQBuffer(OnelineBuffer):
-    n_lines_per_entry = 4
-    _encoding = BaseEncoding
+    def get_sequences(self):
+        self.validate_if_not()
+        sequence_starts = self._new_lines[::self.n_lines_per_entry]+1
+        sequence_ends = self._new_lines[1::self.n_lines_per_entry]
+        seq, new_intervals = self._move_intervals_to_contigous_array(sequence_starts, sequence_ends)
+        seq = self._encoding.from_bytes(seq)
+        return Sequences(seq, new_intervals, encoding=self._encoding)
 
     def _validate(self):
-        n_lines = new_lines.size
-        assert self._new_lines.size % self.n_lines_per_entry == 0, "Wrong number of lines in buffer"
+        n_lines = self._new_lines.size
+        assert n_lines % self.n_lines_per_entry == 0, "Wrong number of lines in buffer"
         header_idxs = self._new_lines[self.n_lines_per_entry-1:-1:self.n_lines_per_entry]+1
         assert np.all(self._data[header_idxs]==self.HEADER)
         self._is_validated = True
 
-    def get_sequences(self, raw_chunk):
-        self.validate_if_not()
-        sequence_starts = self._new_lines[::self.n_lines_per_entry]+1
-        sequence_ends = self._new_lines[1::self.n_lines_per_entry]
-        seq, new_intervals = self._move_intervals_to_contigous_array(self._data, sequence_starts, sequence_ends)
-        seq = self._encoding.from_bytes(seq)
-        return Sequences(seq, new_intervals, encoding=self._encoding)
+class OneLineFastaBuffer(OneLineBuffer):
+    HEADER= 62
+    n_lines_per_entry = 2
 
+class FastQBuffer(OneLineBuffer):
+    n_lines_per_entry = 4
+    _encoding = BaseEncoding
+
+class OneLineFastaBuffer2Bit(OneLineFastaBuffer):
+    _encoding = ACTGTwoBitEncoding
+    _buffer_divisor = 32
+
+class FastQBuffer2Bit(FastQBuffer):
+    _encoding = ACTGTwoBitEncoding
+    _buffer_divisor = 32
 
 class BufferedNumpyParser:
 
@@ -89,6 +96,21 @@ class BufferedNumpyParser:
         self._file_obj = file_obj
         self._chunk_size = chunk_size
         self._is_finished = False
+        self._buffer_type = buffer_type
+
+    @classmethod
+    def from_filename(cls, filename, *args, **kwargs):
+        if any(filename.endswith(suffix) for suffix in ("fasta", "fa", "fasta.gz", "fa.gz")):
+            buffer_type = OneLineFastaBuffer2Bit
+        elif any(filename.lower().endswith(suffix) for suffix in ("fastq", "fq", "fastq.gz", "fq.gz")):
+            buffer_type = FastQBuffer2Bit
+        else:
+            raise NotImplemented
+        if filename.endswith(".gz"):
+            file_obj = gzip.open(filename, "rb")
+        else:
+            file_obj = open(filename, "rb")
+        return cls(file_obj, buffer_type, *args, **kwargs)
 
     def get_chunk(self):
         a, bytes_read = self.read_raw_chunk()
@@ -98,19 +120,24 @@ class BufferedNumpyParser:
         
         # Ensure that the last entry ends with newline. Makes logic easier later
         if self._is_finished  and a[bytes_read-1] != NEWLINE:
-            a[bytes_read]  = NEWLINE
+            a[bytes_read] = NEWLINE
             bytes_read += 1
-        return a[bytes_read]
+        return a[:bytes_read]
+
+    def read_raw_chunk(self):
+        array = np.empty(self._chunk_size, dtype="uint8")
+        bytes_read = self._file_obj.readinto(array)
+        return array, bytes_read
 
     def get_chunks(self):
         chunk = self.get_chunk()
         while not self._is_finished:
-            buff = self._buffer_type.from_raw_chunk(chunk)
+            buff = self._buffer_type.from_raw_buffer(chunk)
             self._file_obj.seek(buff.size-self._chunk_size, 1)
             yield buff
             chunk = self.get_chunk()
-        if chunk:
-            yield self._buffer_type.from_raw_chunk(chunk)
+        if chunk is not None and chunk.size:
+            yield self._buffer_type.from_raw_buffer(chunk)
 
 class TextParser:
     _encoding = BaseEncoding
@@ -131,8 +158,7 @@ class TextParser:
         return array[:last_newline]
 
     def read_raw_chunk(self):
-        # array = np.empty(self._chunk_size, dtype="uint8")
-        array = self._buffer
+        array = np.empty(self._chunk_size, dtype="uint8")
         bytes_read = self._file_obj.readinto(array)
         return array, bytes_read
 
