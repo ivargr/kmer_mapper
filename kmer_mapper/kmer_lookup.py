@@ -1,5 +1,5 @@
 import logging
-
+from .encodings import twobit_swap, ACTGTwoBitEncoding
 import numpy as np
 
 
@@ -76,6 +76,53 @@ class Advanced2(AdvancedKmerLookup):
         indices = self._indexed_lookup.find_matches(kmers)
         return np.bincount(indices, minlength=self._kmers.size)
 
+    @classmethod
+    def from_file(cls, filename):
+        D = np.load(filename)
+        obj = cls(D["kmers"], D["representative_kmers"], D["lookup"])
+        obj._indexed_lookup=IndexedSortedLookup(
+            D["kmers"], D["index"], D["mod"], D["row_size"])
+        return obj
+
+    def to_file(self, filename):
+        np.savez(filename, 
+                 kmers=self._kmers,
+                 representative_kmers=self._representative_kmers,
+                 lookup=self._lookup,
+                 index=self._indexed_lookup._index,
+                 mod=self._indexed_lookup._mod,
+                 row_size=self._indexed_lookup._row_sizes)
+    
+
+class NewHashLookup(Advanced2):
+    dtype=np.uint64
+    k=31
+    @classmethod
+    def _rehash_kmers(cls, kmers):
+        new_hashes = twobit_swap(kmers)>>cls.dtype(2)
+        reverse_hashes = ACTGTwoBitEncoding.complement(kmers) & cls.dtype(4**cls.k-1)
+        return np.concatenate((new_hashes, reverse_hashes))
+
+    @classmethod
+    def from_lookup_with_old_hash(cls, old_lookup):
+        kmers = cls._rehash_kmers(old_lookup._representative_kmers)
+        nodes = np.concatenate((old_lookup._lookup, old_lookup._lookup))
+        ret = cls(np.unique(kmers), kmers, nodes)
+        ret.index_kmers()
+        return ret
+
+    @classmethod
+    def from_old_index_files(cls, filename):
+        logging.info("From old index files")
+        data = np.load(filename)
+        kmers = cls._rehash_kmers(data["kmers"])
+        unique_kmers = np.unique(kmers)
+        nodes = data["nodes"]
+        nodes = np.concatenate((nodes, nodes))
+        k = cls(unique_kmers, kmers, nodes)
+        k.index_kmers()
+        return k
+
 class IndexedSortedLookup(SimpleKmerLookup):
     def __init__(self, sorted_values, index, mod, row_sizes):
         self._sorted_values = np.append(sorted_values, np.array([4**31], dtype=np.uint64))
@@ -94,15 +141,18 @@ class IndexedSortedLookup(SimpleKmerLookup):
         row_sizes = index[1:]-index[:-1]
         return cls(values, index[:-1], mod, row_sizes)
 
-    def find_matches(self, queries):
-        row_numbers = queries // self._mod
+    def _get_matched_data(self, row_numbers):
         row_sizes = self._row_sizes[row_numbers]
         mask = row_sizes > 0
         row_sizes = row_sizes[mask]
         L = self._index[row_numbers[mask]]
-        R = L + row_sizes-1
-        # boundries = self._boundries[row_numbers[mask]].copy()
-        n_iter = int(np.log2(np.max(row_sizes)))+1
+        R = L + row_sizes
+        return L, R, mask, np.max(row_sizes)
+
+
+    def find_matches(self, queries):
+        L, R, mask, row_length = self._get_matched_data(queries // self._mod)
+        n_iter = int(np.log2(row_length))+1
         queries = queries[mask]
         found_indices = self._binary_search(queries, L, R, n_iter)
         return found_indices[self._sorted_values[found_indices]==queries]
@@ -114,9 +164,9 @@ class IndexedSortedLookup(SimpleKmerLookup):
         boundries = np.vstack((L, R))
         indexes = np.arange(boundries.shape[-1])
         for _ in range(n_iter):
-            m = (boundries.sum(axis=0)+1)//2
-            is_larger = (self._sorted_values[m] > queries).astype(int)
-            boundries[is_larger, indexes]= m-is_larger
+            m = (boundries.sum(axis=0))//2
+            is_larger = (self._sorted_values[m] > queries).view(np.uint8)
+            boundries[is_larger, indexes] = m
             """
             m = (L+R+1)//2
             is_larger = self._sorted_values[m] > queries
@@ -139,27 +189,4 @@ class IndexedSortedLookup(SimpleKmerLookup):
             L[~is_larger] = m[~is_larger]
         return L
 
-class HashedKmerLookup(SimpleKmerLookup):
-    def count_kmers(self, kmers):
-        hashes = kmers % self.mod
-        single_hit_mask = self._single_hit_mask[hashes]
-        multi_hit_mask =  self._multi_hit_mask[hashes]
-        single_hit_idxs = self._hash_to_kmer_idx[single_hit_mask]
-        multi_hit_idxs = self._get_indexes(kmers[multi_hit_mask])
-        all_idxs = np.concatenate([
-            single_hit_idxs[self._kmers[single_hit_idxs]==kmers[single_hit_mask]],
-            multi_hit_idxs[self._kmers[multi_hit_idxs]==kmers[multi_hit_mask]]
-            ])
-        return np.bincount(all_idxs, minlength=self._kmers.size)
-
-
-        hash_hit_mask = self._hash_to_kmer[hashes] == kmers
-        kmers = kmers[n_hits==1] == self._hash_to_kmer[hashes[n_hist==1]]
-
-    def _create_hash_table(self, sorted_kmers):
-        hashes = kmers % self.mod
-        n_hits = np.bincount(hashes, minlength=mod)
-        self._single_hit_mask = n_hits==1
-        self._multi_hit_mask = n_hits>1
-        self._hash_to_kmer_idx = np.empty_like(n_hits)
-        self._hash_to_kmer_idx[hashes] = np.arange(kmers.size)
+        
