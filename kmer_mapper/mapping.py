@@ -138,7 +138,6 @@ def map_fasta_single_thread_with_numpy_parsing(data):
     raw_chunk = from_shared_memory(args.buffer_type, reads)
     logging.info("Parsing sequence chunk")
     sequence_chunk = raw_chunk.get_sequences()
-    logging.info("Sequence chunk: %s" % sequence_chunk)
     logging.info("Done parsing sequence chunk")
 
     logging.info("Reading node counts from shared memory")
@@ -147,7 +146,6 @@ def map_fasta_single_thread_with_numpy_parsing(data):
     t = time.perf_counter()
     if args.use_two_bit_parsing:
         hashes = TwoBitHash(k=args.kmer_size).get_kmer_hashes(sequence_chunk)
-        print(hashes)
         logging.info("time to get %d kmer hashes using new numpy: %.3f" % (len(hashes), time.perf_counter() - t))
         t = time.perf_counter()
         node_counts += map_kmers_to_graph_index(kmer_index, args.n_nodes, hashes, args.max_hits_per_kmer)
@@ -199,7 +197,6 @@ def map_fasta_single_thread(data):
 
     kmers = get_kmers_from_read_matrix(read_matrix, mask, args.kmer_size, True, args.include_reverse_complement)
 
-    print(kmers[0:5])
 
     t = time.perf_counter()
     if args.use_numpy:
