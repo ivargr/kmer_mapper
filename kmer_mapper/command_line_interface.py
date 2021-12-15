@@ -78,7 +78,7 @@ def run_argument_parser(args):
                            help="Maximum length of reads. Reads should not be longer than this.")
     subparser.add_argument("-o", "--output-file", required=True)
     subparser.add_argument("-r", "--include-reverse-complement", required=False, default=False, type=bool)
-    subparser.add_argument("-T", "--use-two-bit-parsing", required=False, default=False, type=bool)
+    subparser.add_argument("-T", "--use-numpy-parsing", required=False, default=False, type=bool)
     subparser.add_argument("-I", "--max-hits-per-kmer", required=False, default=1000, type=int,
                            help="Ignore kmers that have more than this amount of hits in index")
     subparser.set_defaults(func=map_fasta_command)

@@ -144,7 +144,7 @@ def map_fasta_single_thread_with_numpy_parsing(data):
     node_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
     logging.info("Done reading from shared memory")
     t = time.perf_counter()
-    if args.use_two_bit_parsing:
+    if not args.use_numpy_parsing:
         hashes = TwoBitHash(k=args.kmer_size).get_kmer_hashes(sequence_chunk)
         logging.info("time to get %d kmer hashes using new numpy: %.3f" % (len(hashes), time.perf_counter() - t))
         t = time.perf_counter()
@@ -235,7 +235,7 @@ def map_fasta(args, kmer_index):
 
     to_shared_memory(SingleSharedArray(node_counts), "counts_shared" + args.random_id)
 
-    if args.use_two_bit_parsing:
+    if not args.use_numpy_parsing:
         logging.info("Using two bit fasta parser")
         parser = BufferedNumpyParser.from_filename(args.fasta_file, args.chunk_size * 130)
         args.buffer_type = OneLineFastaBuffer2Bit
