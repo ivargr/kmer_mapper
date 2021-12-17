@@ -60,9 +60,11 @@ def map_kmers_to_graph_index(index, int max_node_id, np.uint64_t[::1] kmers, int
         for j in range(n_local_hits):
             # Check that this entry actually matches the kmer, sometimes it will not due to collision
             if index_kmers[l] != kmers[i]:
+                l += 1
                 continue
 
             if index_frequencies[l] > max_index_lookup_frequency:
+                l += 1
                 continue
 
             node_counts[nodes[l]] += 1
