@@ -138,7 +138,7 @@ class BufferedNumpyParser:
             t = time.perf_counter()
             buff = self._buffer_type.from_raw_buffer(chunk)
             self._file_obj.seek(buff.size-self._chunk_size, 1)
-            logging.info("Spent %.4f sec reading chunk from file" % (time.perf_counter()-t))
+            #logging.info("Spent %.4f sec reading chunk from file" % (time.perf_counter()-t))
             yield buff
             chunk = self.get_chunk()
         if chunk is not None and chunk.size:

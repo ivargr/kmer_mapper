@@ -101,10 +101,10 @@ def map_kmers_to_graph_index(index, int max_node_id, np.uint64_t[::1] kmers, int
 
     t = time.perf_counter()
     # index arrays
-    #cdef np.int64_t[:] hashes_to_index = index._hashes_to_index
-    cdef np.ndarray[np.int64_t] hashes_to_index = index._hashes_to_index
-    #cdef np.uint32_t[:] n_kmers = index._n_kmers
-    cdef np.ndarray[np.uint32_t] n_kmers = index._n_kmers
+    cdef np.int64_t[:] hashes_to_index = index._hashes_to_index
+    #cdef np.ndarray[np.int64_t] hashes_to_index = index._hashes_to_index
+    cdef np.uint32_t[:] n_kmers = index._n_kmers
+    #cdef np.ndarray[np.uint32_t] n_kmers = index._n_kmers
     cdef np.uint32_t[::1] nodes = index._nodes
     cdef np.uint64_t[::1] index_kmers = index._kmers
     cdef np.uint16_t[::1] index_frequencies = index._frequencies.data
@@ -128,28 +128,30 @@ def map_kmers_to_graph_index(index, int max_node_id, np.uint64_t[::1] kmers, int
     t = time.perf_counter()
     #logging.info("Will process %d kmers" % kmers.shape[0])
 
-    cdef np.uint32_t[::1] n_local_hits_array = n_kmers[kmer_hashes]
-    cdef np.int64_t[::1] index_position_array = hashes_to_index[kmer_hashes]
+    #cdef np.uint32_t[::1] n_local_hits_array = n_kmers[kmer_hashes]
+    #cdef np.int64_t[::1] index_position_array = hashes_to_index[kmer_hashes]
 
 
     for i in range(kmers.shape[0]):
+        hash = kmer_hashes[i]
 
-        if n_local_hits_array[i] == 0:
-            n_no_index_hits += 1
+        if hash == 0:
+            continue
 
+        n_local_hits = n_kmers[hash]
+        index_position = hashes_to_index[hash]
 
-        for j in range(n_local_hits_array[i]):
-            l = index_position_array[i] + j
+        for j in range(n_local_hits):
+            l = index_position + j
             # Check that this entry actually matches the kmer, sometimes it will not due to collision
             if index_kmers[l] != kmers[i]:
-                #n_collisions += 1
                 continue
 
             if index_frequencies[l] > max_index_lookup_frequency:
+                n_skipped_high_frequency += 1
                 continue
 
             node_counts_view[nodes[l]] += 1
-            n_kmers_mapped += 1
 
     logging.info("Time spent looking up kmers in index: %.3f" % (time.perf_counter()-t))
     logging.info("N kmers mapped: %d" % n_kmers_mapped)

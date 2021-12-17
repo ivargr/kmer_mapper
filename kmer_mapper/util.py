@@ -1,5 +1,7 @@
 import numpy as np
 #import numpy_indexed as npi
+import resource
+import logging
 
 def read_fasta(file_name):
     i = 0
@@ -18,5 +20,7 @@ def remap_array(array, from_values, to_values):
     return to_values[index].reshape(array.shape)
 
 
-def remap_array2(array):
-    return npi.remap(array, np.array([0, 1, 2, 3]), np.array([100, 200, 300, 400]))
+
+def log_memory_usage_now(logplace=""):
+    memory = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) / 1000000
+    logging.info("Memory usage (%s): %.4f GB" % (logplace, memory))

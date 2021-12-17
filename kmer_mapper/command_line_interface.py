@@ -16,6 +16,7 @@ from .kmer_lookup import Advanced2
 from .parser import OneLineFastaParser, Sequences
 from shared_memory_wrapper import from_shared_memory, to_shared_memory, SingleSharedArray
 from shared_memory_wrapper.shared_memory import remove_shared_memory_in_session
+from shared_memory_wrapper.shared_memory import get_shared_pool
 from pathos.multiprocessing import Pool
 from itertools import repeat
 
@@ -36,6 +37,8 @@ def map_fasta_command(args):
                           "format, you can pipe fasta to kmer_mapper and use a dash as file name (-f -)")
         sys.exit(1)
 
+
+    get_shared_pool(args.n_threads)
 
     if args.kmer_index is None:
         if args.index_bundle is None:
