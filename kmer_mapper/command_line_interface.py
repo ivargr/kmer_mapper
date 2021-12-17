@@ -56,6 +56,11 @@ def map_fasta_command(args):
                 cls = MinimalKmerIndex
             kmer_index = cls.from_file(args.kmer_index)
 
+    kmer_index._ref_offsets = np.array([0])
+    kmer_index._hashes_to_index = kmer_index._hashes_to_index.astype(np.int32)
+    kmer_index._nodes = kmer_index._nodes.astype(np.int32)
+    kmer_index._n_kmers = kmer_index._n_kmers.astype(np.int32)
+    kmer_index._modulo = np.uint64(kmer_index._modulo)
     map_fasta(args, kmer_index)
 
 
