@@ -172,7 +172,7 @@ def map_fasta(args, kmer_index):
     data = zip(reads, repeat(args))
 
     for result in pool.imap(func, data, chunksize=1):
-        logging.info("Done with iteration %d" % i)
+        logging.info("Done with %d chunks" % i)
         i += 1
 
     node_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
