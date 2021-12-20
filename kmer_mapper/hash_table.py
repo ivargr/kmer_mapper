@@ -10,6 +10,15 @@ class ModuloHashLookup:
     def _get_hash(self, queries):
         return queries % self._mod
 
+    def get_hit_idxs(self, queries):
+        hashes = self._get_hash(queries)
+        return np.flatnonzero(self._n_entries[hashes])
+
+    def get_hits(self, queries):
+        queries = queries[self.get_hit_idxs(queries)]
+        indexes = self.get_index(queries)
+        return indexes[self._values[indexes]==queries]
+
     def find_matches(self, queries):
         hashes = self._get_hash(queries)
         n_entries = self._n_entries[hashes]
@@ -24,15 +33,18 @@ class ModuloHashLookup:
         found_indices = self._binary_search(queries, L, R, n_iters)
         return found_indices[self._values[found_indices]==queries]
 
-    def get_index(self, kmers):
-        row_numbers = self._get_hash(kmers)
-        n_entries = self._n_entries[row_numbers]
-        assert np.min(n_entries)>0, np.min(n_entries)
-        R = self._lookup_end[row_numbers]
-        L = R - n_entries
+    def get_index(self, queries):
+        hashes = self._get_hash(queries)
+        n_entries = self._n_entries[hashes]
         n_iters = np.floor(np.log2(n_entries)).astype(int)+1
-        n_iters = np.maximum(n_iters, np.max(n_iters))
-        found_indices = self._binary_search(kmers, L, R, n_iters)
+        n_iter_sort_args = np.argsort(n_iters)
+        n_entries = n_entries[n_iter_sort_args]
+        hashes = hashes[n_iter_sort_args]
+        n_iters = n_iters[n_iter_sort_args]
+        R = self._lookup_end[hashes]
+        L = R - n_entries
+        found_indices = np.zeros_like(queries, dtype=int)
+        found_indices[n_iter_sort_args] = self._binary_search(queries[n_iter_sort_args], L, R, n_iters)
         return found_indices
 
     def _binary_search(self, queries, L, R, n_iters):
@@ -80,7 +92,8 @@ class NodeCount:
         return np.bincount(self._node_ids, counts[self._kmer_indexes])
 
     def count_kmers(self, kmers):
-        indices = self._indexed_lookup.find_matches(kmers)
+        indices = self._indexed_lookup.get_hits(kmers)
+        # indices = self._indexed_lookup.find_matches(kmers)
         return np.bincount(indices, minlength=self._kmers.size)
 
     @classmethod
