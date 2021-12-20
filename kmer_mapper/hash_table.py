@@ -19,20 +19,6 @@ class ModuloHashLookup:
         indexes = self.get_index(queries)
         return indexes[self._values[indexes]==queries]
 
-    def find_matches(self, queries):
-        hashes = self._get_hash(queries)
-        n_entries = self._n_entries[hashes]
-        hit_idxs = np.flatnonzero(n_entries)
-        n_entries = n_entries[hit_idxs]
-        n_iters = np.floor(np.log2(n_entries)).astype(int)+1 #Required iterations for binary search
-        args = np.argsort(n_iters)
-        hit_idxs = hit_idxs[args]
-        R = self._lookup_end[hashes[hit_idxs]]
-        L = R - n_entries[args]
-        queries = queries[hit_idxs]
-        found_indices = self._binary_search(queries, L, R, n_iters)
-        return found_indices[self._values[found_indices]==queries]
-
     def get_index(self, queries):
         hashes = self._get_hash(queries)
         n_entries = self._n_entries[hashes]
