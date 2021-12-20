@@ -64,6 +64,7 @@ class NodeCount:
     k=31
     lookup_class = ModuloHashLookup
     n_bins = 200000003
+
     def __init__(self, kmers, kmer_indexes, node_ids):
         self._kmers = kmers
         self._node_ids = node_ids
