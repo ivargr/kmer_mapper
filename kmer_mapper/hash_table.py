@@ -69,6 +69,9 @@ class NodeCount:
         self._node_ids = node_ids
         self._kmer_indexes = kmer_indexes
 
+    def max_node_id(self):
+        return np.max(self._node_ids)
+
     def index_kmers(self):
         self._indexed_lookup = self.lookup_class.from_values_and_mod(
             self._kmers, np.uint64(self.n_bins))

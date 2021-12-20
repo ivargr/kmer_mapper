@@ -1,17 +1,24 @@
+import gc
+import itertools
 import logging
 import time
 import numpy as np
-from mapper import read_fasta_into_chunks, map_kmers_to_graph_index
-from kmer_mapper.util import remap_array, remap_array2
+#from mapper import read_fasta_into_chunks, \
+from mapper import map_kmers_to_graph_index
+from kmer_mapper.util import remap_array
 from scipy.ndimage import convolve1d
 import pandas as pd
 import scipy.signal
 from graph_kmer_index import KmerIndex
 from shared_memory_wrapper import from_shared_memory, to_shared_memory, SingleSharedArray
+from shared_memory_wrapper.shared_memory import get_shared_pool, close_shared_pool
 from pathos.multiprocessing import Pool
 from itertools import repeat
 from graph_kmer_index.collision_free_kmer_index import MinimalKmerIndex
+
+from .hash_table import NodeCount
 from .parser import OneLineFastaParser, Sequences, OneLineFastaParser2bit, BufferedNumpyParser, OneLineFastaBuffer2Bit
+from .util import log_memory_usage_now
 from .kmers import KmerHash, TwoBitHash
 
 
@@ -119,145 +126,64 @@ def get_kmers_from_fasta(fasta_file_name, chunk_size=500000, k=31, max_read_leng
 
 def map_fasta_single_thread_with_numpy_parsing(data):
     logging.info("---------------------")
-    logging.info("---------------------")
-    logging.info("Starting chunk")
+    logging.info("Starting processing chunk of reads")
+    log_memory_usage_now()
     time_start = time.perf_counter()
     reads, args = data
-    logging.info("Reads: %s" % reads)
-    cls = KmerIndex
-    if "minimal" in args.kmer_index:
-        cls = MinimalKmerIndex
 
-    if args.no_shared_memory:
-        kmer_index = cls.from_file(args.kmer_index)
-    else:
-        kmer_index = from_shared_memory(cls, "kmer_index"+args.random_id)
-
-    logging.info("Reading from shared memory")
-    #sequence_chunk = from_shared_memory(Sequences, reads)
     raw_chunk = from_shared_memory(args.buffer_type, reads)
-    logging.info("Parsing sequence chunk")
     sequence_chunk = raw_chunk.get_sequences()
-    logging.info("Sequence chunk: %s" % sequence_chunk)
-    logging.info("Done parsing sequence chunk")
-
-    logging.info("Reading node counts from shared memory")
+    logging.info("Size of sequence chunk (GB): %.3f" % (sequence_chunk.nbytes() / 1000000000))
     node_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
-    logging.info("Done reading from shared memory")
+
     t = time.perf_counter()
-    if args.use_two_bit_parsing:
-        hashes = TwoBitHash(k=args.kmer_size).get_kmer_hashes(sequence_chunk)
-        print(hashes)
-        logging.info("time to get %d kmer hashes using new numpy: %.3f" % (len(hashes), time.perf_counter() - t))
-        t = time.perf_counter()
-        node_counts += map_kmers_to_graph_index(kmer_index, args.n_nodes, hashes, args.max_hits_per_kmer)
-        logging.info("Done mapping to kmer index. Took %.3f sec" % (time.perf_counter() - t))
-    else:
-        hashes, reverse_complement_hashes, mask = KmerHash(k=args.kmer_size).get_kmer_hashes(sequence_chunk, args.include_reverse_complement)
-        logging.info("time to get %d kmer hashes using new numpy: %.3f" % (len(hashes), time.perf_counter()-t))
-        for h in (hashes, reverse_complement_hashes):
-            if h is None:
-                logging.info("Skipping hashing (reverse complement)")
-                continue
-            h = h[mask]
-            t = time.perf_counter()
-            node_counts += map_kmers_to_graph_index(kmer_index, args.n_nodes, h, args.max_hits_per_kmer)
-            logging.info("Done mapping to kmer index. Took %.3f sec" % (time.perf_counter()-t))
-
-    logging.info("Done with chunk. Took %.3f sec" % (time.perf_counter()-time_start))
-
-
-
-def map_fasta_single_thread(data):
-    start_time = time.time()
-    reads, args = data
-    read_matrix, mask = reads
-    if isinstance(read_matrix, str):
-        logging.info("Reading reads from shared memory %s" % read_matrix)
-        read_matrix = from_shared_memory(SingleSharedArray, read_matrix).array
-        mask = from_shared_memory(SingleSharedArray, mask).array
-
-    t = time.time()
-    read_matrix = convert_byte_read_array_to_int_array(read_matrix, args.max_read_length).astype(np.uint64)
-    if read_matrix.shape[0] == 0:
-        logging.warning("There are 0 reads in read matrix")
-        return
-
-    logging.info("Spent %.5f sec to convert byte read array to int read matrix " % (time.time()-t))
-
-    shared_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
-
-    cls = KmerIndex
-    if "minimal" in args.kmer_index:
-        cls = MinimalKmerIndex
-
-    if args.no_shared_memory:
-        logging.info("reading kmer index from file in thread")
-        index = cls.from_file(args.kmer_index)
-    else:
-        index = from_shared_memory(cls, "kmer_index"+args.random_id)
-
-    kmers = get_kmers_from_read_matrix(read_matrix, mask, args.kmer_size, True, args.include_reverse_complement)
-
-    print(kmers[0:5])
+    hashes = TwoBitHash(k=args.kmer_size).get_kmer_hashes(sequence_chunk)
+    logging.info("Size of hashes (GB): %.3f" % (hashes.nbytes / 1000000000))
+    logging.info("Time spent to get %d kmer hashes: %.3f" % (len(hashes), time.perf_counter() - t))
 
     t = time.perf_counter()
     if args.use_numpy:
-        node_counts = index.get_node_counts(kmers)
+        kmer_index = from_shared_memory(NodeCount, args.kmer_index)
+        node_counts += kmer_index.get_node_counts(hashes)
     else:
-        node_counts = map_kmers_to_graph_index(index, args.n_nodes, kmers, args.max_hits_per_kmer)
+        kmer_index = from_shared_memory(KmerIndex, args.kmer_index)
+        node_counts += map_kmers_to_graph_index(kmer_index, args.n_nodes, hashes, args.max_hits_per_kmer)
+    logging.info("Getting node counts took %.3f sec" % (time.perf_counter()-t))
 
-    logging.info("----- Time spent getting node counts: %.4f" % (time.perf_counter()-t))
-
-    shared_counts += node_counts
-    end_time = time.time()
-    logging.info("One chunk took %.4f sec " % (end_time-start_time))
+    logging.info("Done with chunk. Took %.3f sec" % (time.perf_counter()-time_start))
 
 
 def map_fasta(args, kmer_index):
     logging.info("Mapping fasta to kmer index %s" % args.kmer_index)
     args.random_id = str(np.random.random())
     n_nodes = kmer_index.max_node_id()
-    if not args.no_shared_memory:
-        logging.info("Putting kmer index in shared memory")
-        to_shared_memory(kmer_index, "kmer_index"+args.random_id)
-    else:
-        logging.info("Not putting kmer index in shared memory")
-
-    kmer_index = None
-
+    logging.info("Putting kmer index in shared memory")
+    args.kmer_index = to_shared_memory(kmer_index)
 
     args.n_nodes = n_nodes
     start_time = time.time()
 
-    pool = Pool(args.n_threads)
-    node_counts = np.zeros(n_nodes+1, dtype=float)
+    pool = get_shared_pool(args.n_threads)
+    node_counts = np.zeros(n_nodes+1, dtype=np.uint32)
 
     to_shared_memory(SingleSharedArray(node_counts), "counts_shared" + args.random_id)
+    node_counts = None
+    parser = BufferedNumpyParser.from_filename(args.fasta_file, args.chunk_size * 130)
+    args.buffer_type = OneLineFastaBuffer2Bit
+    chunks = parser.get_chunks()
+    reads = (to_shared_memory(chunk) for chunk in chunks)
+    func = map_fasta_single_thread_with_numpy_parsing
 
-    if args.use_two_bit_parsing:
-        logging.info("Using two bit fasta parser")
-        parser = BufferedNumpyParser.from_filename(args.fasta_file, args.chunk_size * 130)
-        args.buffer_type = OneLineFastaBuffer2Bit
-        chunks = parser.get_chunks()
-        reads = (to_shared_memory(chunk) for chunk in chunks)
-        func = map_fasta_single_thread_with_numpy_parsing
-    elif not args.use_cython_file_reading:
-        logging.info("Using numpy fasta parser")
-        fasta_parser = OneLineFastaParser(args.fasta_file, args.chunk_size * 130)
-        reads = fasta_parser.parse(as_shared_memory_object=True)
-        func = map_fasta_single_thread_with_numpy_parsing
-    else:
-        reads = read_fasta_into_chunks(args.fasta_file, args.chunk_size, args.max_read_length, write_to_shared_memory=True, process_reads=False)
-        func = map_fasta_single_thread
+    i = 0
+    data = zip(reads, repeat(args))
 
-    # set index to None, so that it won't be pickled and transferred to processes
-    logging.info("Got reads, starting processes")
-    logging.info("Args is %s" % str(args))
-    for result in pool.imap(func, zip(reads, repeat(args))):
-        continue
+    for result in pool.imap(func, data, chunksize=1):
+        logging.info("Done with %d chunks" % i)
+        i += 1
 
     node_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
     np.save(args.output_file, node_counts)
     logging.info("Saved node counts to %s.npy" % args.output_file)
     logging.info("Spent %.3f sec in total mapping kmers using %d threads" % (time.time()-start_time, args.n_threads))
+
+    close_shared_pool()

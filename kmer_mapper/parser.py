@@ -31,7 +31,7 @@ class FileBuffer:
     @property
     def size(self):
         return self._data.size
-    
+
     def _move_intervals_to_contigous_array(self, starts, ends):
         """
         Create a mask for where the sequences are and move sequences to continous array
@@ -120,7 +120,7 @@ class BufferedNumpyParser:
         self._is_finished = bytes_read < self._chunk_size
         if bytes_read == 0:
             return None
-        
+
         # Ensure that the last entry ends with newline. Makes logic easier later
         if self._is_finished  and a[bytes_read-1] != NEWLINE:
             a[bytes_read] = NEWLINE
@@ -135,8 +135,10 @@ class BufferedNumpyParser:
     def get_chunks(self):
         chunk = self.get_chunk()
         while not self._is_finished:
+            t = time.perf_counter()
             buff = self._buffer_type.from_raw_buffer(chunk)
             self._file_obj.seek(buff.size-self._chunk_size, 1)
+            #logging.info("Spent %.4f sec reading chunk from file" % (time.perf_counter()-t))
             yield buff
             chunk = self.get_chunk()
         if chunk is not None and chunk.size:
@@ -194,7 +196,7 @@ class TextParser:
     def cut_chunk(self, chunk):
         new_lines = np.flatnonzero(chunk == NEW_LINE)
         return self._cut_array(chunk, new_lines[-1])
-        
+
 
     def parse_chunk(self):
         a, bytes_read = self.read_raw_chunk()

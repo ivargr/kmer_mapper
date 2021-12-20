@@ -23,3 +23,7 @@ class Sequences:
     def __repr__(self):
         return "Seqs(%s, %s)" % (str(self.sequences), self.intervals)
 
+    def nbytes(self):
+        return self.sequences.nbytes + self.intervals_start.nbytes + self.intervals_end.nbytes
+
+
