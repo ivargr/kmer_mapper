@@ -1,4 +1,5 @@
 import numpy as np
+import logging
 
 class ModuloHashLookup:
     def __init__(self, values, mod, n_entries, lookup_end):

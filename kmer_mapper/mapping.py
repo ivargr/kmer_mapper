@@ -210,11 +210,8 @@ def map_fasta_single_thread(data):
     logging.info("----- Time spent getting node counts: %.4f" % (time.perf_counter()-t))
 
     shared_counts += node_counts
-    #shared_memory_name = "node_counts"+str(np.random.randint(0,10e15))
-    #to_shared_memory(SingleSharedArray(node_counts), shared_memory_name)
     end_time = time.time()
     logging.info("One chunk took %.4f sec " % (end_time-start_time))
-    #return shared_memory_name
 
 
 def map_fasta(args, kmer_index):

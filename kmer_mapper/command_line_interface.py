@@ -45,8 +45,9 @@ def map_fasta_command(args):
             kmer_index = IndexBundle.from_file(args.index_bundle).indexes
     else:
         if args.use_numpy:
+            from .hash_table import NodeCount
             logging.info("Using numpy index")
-            args.kmer_index = Advanced2.from_old_index_files(args.kmer_index)
+            args.kmer_index = NodeCount.from_old_index_files(args.kmer_index)
         else:
             cls = KmerIndex
             if "minimal" in args.kmer_index:
