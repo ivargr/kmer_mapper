@@ -80,7 +80,11 @@ class NodeCount:
 
     def get_node_counts(self, kmers):
         counts = self.count_kmers(kmers)
-        return np.bincount(self._node_ids, counts[self._kmer_indexes])
+        return self.get_node_counts_from_kmer_counts(counts)
+        # return np.bincount(self._node_ids, counts[self._kmer_indexes])
+
+    def get_node_counts_from_kmer_counts(self, kmer_counts):
+        return np.bincount(self._node_ids, kmer_counts[self._kmer_indexes])
 
     def count_kmers(self, kmers):
         indices = self._indexed_lookup.get_hits(kmers)
