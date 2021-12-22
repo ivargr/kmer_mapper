@@ -143,8 +143,8 @@ def map_fasta_single_thread_with_numpy_parsing(data):
 
     t = time.perf_counter()
     if args.use_numpy:
-        kmer_index = from_shared_memory(NodeCount, args.kmer_index)
-        node_counts += kmer_index.get_node_counts(hashes)
+        kmer_index = args.kmer_index  # from_shared_memory(NodeCount, args.kmer_index)
+        node_counts += kmer_index.get_node_counts(hashes).astype(np.uint32)
     else:
         kmer_index = from_shared_memory(KmerIndex, args.kmer_index)
         node_counts += map_kmers_to_graph_index(kmer_index, args.n_nodes, hashes, args.max_hits_per_kmer)
@@ -158,7 +158,10 @@ def map_fasta(args, kmer_index):
     args.random_id = str(np.random.random())
     n_nodes = kmer_index.max_node_id()
     logging.info("Putting kmer index in shared memory")
-    args.kmer_index = to_shared_memory(kmer_index)
+    if not args.use_numpy:
+        args.kmer_index = to_shared_memory(kmer_index)
+    else:
+        args.kmer_index = kmer_index
 
     args.n_nodes = n_nodes
     start_time = time.time()
