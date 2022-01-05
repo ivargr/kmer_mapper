@@ -14,8 +14,6 @@ def read_fasta(file_name):
 
 
 def remap_array(array, from_values, to_values):
-    #from_values = np.array([0, 1, 2, 3])
-    #to_values = np.array([100, 200, 300, 400])
     index = np.digitize(array.ravel(), from_values, right=True)
     return to_values[index].reshape(array.shape)
 

@@ -134,7 +134,11 @@ def map_fasta_single_thread_with_numpy_parsing(data):
     raw_chunk = from_shared_memory(args.buffer_type, reads)
     sequence_chunk = raw_chunk.get_sequences()
     logging.info("Size of sequence chunk (GB): %.3f" % (sequence_chunk.nbytes() / 1000000000))
-    node_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
+
+    if args.use_numpy:
+        kmer_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
+    else:
+        node_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
 
     t = time.perf_counter()
     hashes = TwoBitHash(k=args.kmer_size).get_kmer_hashes(sequence_chunk)
@@ -144,12 +148,13 @@ def map_fasta_single_thread_with_numpy_parsing(data):
     t = time.perf_counter()
     if args.use_numpy:
         kmer_index = args.kmer_index  # from_shared_memory(NodeCount, args.kmer_index)
-        node_counts += kmer_index.get_node_counts(hashes).astype(np.uint32)
+        #node_counts += kmer_index.(hashes).astype(np.uint32)
+        kmer_counts += kmer_index.count_kmers(hashes).astype(np.uint32)
+        logging.info("Got kmer counts")
     else:
         kmer_index = from_shared_memory(KmerIndex, args.kmer_index)
         node_counts += map_kmers_to_graph_index(kmer_index, args.n_nodes, hashes, args.max_hits_per_kmer)
     logging.info("Getting node counts took %.3f sec" % (time.perf_counter()-t))
-
     logging.info("Done with chunk. Took %.3f sec" % (time.perf_counter()-time_start))
 
 
@@ -167,10 +172,18 @@ def map_fasta(args, kmer_index):
     start_time = time.time()
 
     pool = get_shared_pool(args.n_threads)
-    node_counts = np.zeros(n_nodes+1, dtype=np.uint32)
 
-    to_shared_memory(SingleSharedArray(node_counts), "counts_shared" + args.random_id)
-    node_counts = None
+    if args.use_numpy:
+        n_kmers = kmer_index._kmers.size
+        kmer_counts = np.zeros(n_kmers, dtype=np.uint32)
+        to_shared_memory(SingleSharedArray(kmer_counts), "counts_shared" + args.random_id)
+        kmer_counts = None
+    else:
+        node_counts = np.zeros(n_nodes+1, dtype=np.uint32)
+        to_shared_memory(SingleSharedArray(node_counts), "counts_shared" + args.random_id)
+        node_counts = None
+
+
     parser = BufferedNumpyParser.from_filename(args.fasta_file, args.chunk_size * 130)
     args.buffer_type = OneLineFastaBuffer2Bit
     chunks = parser.get_chunks()
@@ -184,7 +197,13 @@ def map_fasta(args, kmer_index):
         logging.info("Done with %d chunks" % i)
         i += 1
 
-    node_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
+    if args.use_numpy:
+        kmer_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
+        logging.info("Getting node counts from kmer counts")
+        node_counts = kmer_index.get_node_counts_from_kmer_counts(kmer_counts)
+    else:
+        node_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array            
+    
     np.save(args.output_file, node_counts)
     logging.info("Saved node counts to %s.npy" % args.output_file)
     logging.info("Spent %.3f sec in total mapping kmers using %d threads" % (time.time()-start_time, args.n_threads))
