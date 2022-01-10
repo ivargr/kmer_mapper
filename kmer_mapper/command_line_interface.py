@@ -1,7 +1,7 @@
 import logging
 import sys
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
-from graph_kmer_index.collision_free_kmer_index import MinimalKmerIndex
+from graph_kmer_index.collision_free_kmer_index import MinimalKmerIndex, CounterKmerIndex
 import numpy as np
 import argparse
 from graph_kmer_index import KmerIndex
@@ -10,6 +10,7 @@ from graph_kmer_index.index_bundle import IndexBundle
 from .kmer_lookup import Advanced2
 from shared_memory_wrapper.shared_memory import remove_shared_memory_in_session
 from shared_memory_wrapper.shared_memory import get_shared_pool
+from shared_memory_wrapper import from_file, object_to_shared_memory
 
 
 def main():
@@ -30,6 +31,7 @@ def map_fasta_command(args):
         sys.exit(1)
 
     get_shared_pool(args.n_threads)
+    kmer_index = None
 
     if args.kmer_index is None:
         if args.index_bundle is None:
@@ -41,8 +43,7 @@ def map_fasta_command(args):
             kmer_index.remove_ref_offsets()  # not needed, will save us some memory
     else:
         if args.use_numpy:
-            from .hash_table import NodeCount
-            kmer_index = NodeCount.from_old_index_files(args.kmer_index)
+            args.counter = object_to_shared_memory(from_file(args.kmer_index))
         else:
             cls = KmerIndex
             if "minimal" in args.kmer_index:
@@ -50,6 +51,7 @@ def map_fasta_command(args):
             kmer_index = cls.from_file(args.kmer_index)
             kmer_index.convert_to_int32()
             kmer_index.remove_ref_offsets()  # not needed, will save us some memory
+            args.max_node_id = kmer_index.max_node_id()
 
     map_fasta(args, kmer_index)
 

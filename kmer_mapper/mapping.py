@@ -1,6 +1,7 @@
 import gc
 import itertools
 import logging
+import sys
 import time
 import numpy as np
 #from mapper import read_fasta_into_chunks, \
@@ -11,7 +12,7 @@ import pandas as pd
 import scipy.signal
 from graph_kmer_index import KmerIndex
 from shared_memory_wrapper import from_shared_memory, to_shared_memory, SingleSharedArray
-from shared_memory_wrapper.shared_memory import get_shared_pool, close_shared_pool
+from shared_memory_wrapper.shared_memory import get_shared_pool, close_shared_pool, object_from_shared_memory
 from pathos.multiprocessing import Pool
 from itertools import repeat
 from graph_kmer_index.collision_free_kmer_index import MinimalKmerIndex
@@ -20,6 +21,7 @@ from .hash_table import NodeCount
 from .parser import OneLineFastaParser, Sequences, OneLineFastaParser2bit, BufferedNumpyParser, OneLineFastaBuffer2Bit
 from .util import log_memory_usage_now
 from .kmers import KmerHash, TwoBitHash
+from npstructures import Counter
 
 
 def get_reads_as_matrices(read_file_name, chunk_size=500000, max_read_length=150):
@@ -135,9 +137,7 @@ def map_fasta_single_thread_with_numpy_parsing(data):
     sequence_chunk = raw_chunk.get_sequences()
     logging.info("Size of sequence chunk (GB): %.3f" % (sequence_chunk.nbytes() / 1000000000))
 
-    if args.use_numpy:
-        kmer_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
-    else:
+    if not args.use_numpy:
         node_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
 
     t = time.perf_counter()
@@ -147,13 +147,13 @@ def map_fasta_single_thread_with_numpy_parsing(data):
 
     t = time.perf_counter()
     if args.use_numpy:
-        kmer_index = args.kmer_index  # from_shared_memory(NodeCount, args.kmer_index)
-        #node_counts += kmer_index.(hashes).astype(np.uint32)
-        kmer_counts += kmer_index.count_kmers(hashes).astype(np.uint32)
-        logging.info("Got kmer counts")
+        counter = object_from_shared_memory(args.counter)
+        t_before_count = time.perf_counter()
+        counter.counter.count(hashes.astype(np.int64))
+        logging.info("Done counting, took %.3f sec" % (time.perf_counter()-t_before_count))
     else:
         kmer_index = from_shared_memory(KmerIndex, args.kmer_index)
-        node_counts += map_kmers_to_graph_index(kmer_index, args.n_nodes, hashes, args.max_hits_per_kmer)
+        node_counts += map_kmers_to_graph_index(kmer_index, args.max_node_id, hashes, args.max_hits_per_kmer)
     logging.info("Getting node counts took %.3f sec" % (time.perf_counter()-t))
     logging.info("Done with chunk. Took %.3f sec" % (time.perf_counter()-time_start))
 
@@ -161,25 +161,18 @@ def map_fasta_single_thread_with_numpy_parsing(data):
 def map_fasta(args, kmer_index):
     logging.info("Mapping fasta to kmer index %s" % args.kmer_index)
     args.random_id = str(np.random.random())
-    n_nodes = kmer_index.max_node_id()
     logging.info("Putting kmer index in shared memory")
     if not args.use_numpy:
         args.kmer_index = to_shared_memory(kmer_index)
     else:
         args.kmer_index = kmer_index
 
-    args.n_nodes = n_nodes
     start_time = time.time()
 
     pool = get_shared_pool(args.n_threads)
 
-    if args.use_numpy:
-        n_kmers = kmer_index._kmers.size
-        kmer_counts = np.zeros(n_kmers, dtype=np.uint32)
-        to_shared_memory(SingleSharedArray(kmer_counts), "counts_shared" + args.random_id)
-        kmer_counts = None
-    else:
-        node_counts = np.zeros(n_nodes+1, dtype=np.uint32)
+    if not args.use_numpy:
+        node_counts = np.zeros(args.max_node_id+1, dtype=np.uint32)
         to_shared_memory(SingleSharedArray(node_counts), "counts_shared" + args.random_id)
         node_counts = None
 
@@ -193,14 +186,20 @@ def map_fasta(args, kmer_index):
     i = 0
     data = zip(reads, repeat(args))
 
+
     for result in pool.imap(func, data, chunksize=1):
+    #for result in map(func, data):
         logging.info("Done with %d chunks" % i)
         i += 1
 
     if args.use_numpy:
-        kmer_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array
-        logging.info("Getting node counts from kmer counts")
-        node_counts = kmer_index.get_node_counts_from_kmer_counts(kmer_counts)
+        t0 = time.perf_counter()
+        counter = object_from_shared_memory(args.counter)
+        kmer_counts = counter.counter[counter.kmers]
+        logging.info("Time to get counts for the index kmers from counter: %.3f" % (time.perf_counter()-t0))
+        node_counts = np.bincount(counter.nodes, kmer_counts)
+        logging.info("Sum of node counts: %d" % np.sum(node_counts))
+        logging.info("Sum of counts: %d" % np.sum(kmer_counts))
     else:
         node_counts = from_shared_memory(SingleSharedArray, "counts_shared"+args.random_id).array            
     
