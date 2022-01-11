@@ -24,6 +24,7 @@ def map_fasta_command(args):
         sys.exit(1)
 
     logging.info("Max read length is specified to %d" % args.max_read_length)
+    logging.info("Max hits per kmer: %d" % args.max_hits_per_kmer)
 
     if not args.fasta_file.endswith(".fa"):
         logging.error("Only fasta files (not fq or gzipped files) are supported to the argument -f. If you have another"
@@ -52,6 +53,7 @@ def map_fasta_command(args):
             kmer_index.convert_to_int32()
             kmer_index.remove_ref_offsets()  # not needed, will save us some memory
             args.max_node_id = kmer_index.max_node_id()
+            logging.info("Max node id is %d" % args.max_node_id)
 
     map_fasta(args, kmer_index)
 
