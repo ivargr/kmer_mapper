@@ -1,8 +1,8 @@
 # Kmer Mapper
-Python package for fast mapping of kmers from a fasta file to a [Kmer Index](https://github.com/ivargr/graph_kmer_index). Relies on Numpy and some Cython to achieve fast mapping. Reads are read as bytes using Cython and kmers are extracted efficiently by using Numpy's convolve function. 
+Python package for fast mapping of kmers from a fasta file to a [Kmer Index](https://github.com/ivargr/graph_kmer_index). Relies on Numpy and some Cython to achieve fast mapping. 
 
 ### Installation
-Required Python 3.
+Requires Python 3.
 ```bash
 pip install kmer_mapper
 ```
