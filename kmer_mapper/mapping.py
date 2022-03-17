@@ -28,9 +28,6 @@ from npstructures import Counter
 def map_kmers_to_graph_index_wrapper(*args):
     return map_kmers_to_graph_index(*args)
 
-def get_reads_as_matrices(read_file_name, chunk_size=500000, max_read_length=150):
-    return (chunk for chunk in read_fasta_into_chunks(read_file_name, chunk_size, max_read_length))
-
 
 def convert_byte_read_array_to_int_array(reads, read_length):
     # each item is a byesequence, one byte for each base pair
@@ -119,15 +116,6 @@ def get_kmers_from_read_matrix(read_matrix, mask, k=31, return_only_kmers=False,
     logging.info("Time to count kmers: %.3f" % (time.time()-t))
 
     return unique, counts
-
-
-def get_kmers_from_fasta(fasta_file_name, chunk_size=500000, k=31, max_read_length=150, return_only_kmers=False):
-    t = time.time()
-    #logging.info("Read %d reads" % reads.shape[0])
-    #logging.info("Time reading from file: %.4f" % (time.time()-t))
-    reads, mask = next(get_reads_as_matrices(fasta_file_name, chunk_size=chunk_size, max_read_length=max_read_length))
-    return get_kmers_from_read_matrix(reads, mask, k=k, return_only_kmers=return_only_kmers)
-
 
 
 def map_fasta_single_thread_with_numpy_parsing(data):
