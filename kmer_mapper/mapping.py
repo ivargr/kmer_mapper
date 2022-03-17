@@ -5,7 +5,8 @@ import sys
 import time
 import numpy as np
 #from mapper import read_fasta_into_chunks, \
-from mapper import map_kmers_to_graph_index
+
+from kmer_mapper.mapper import map_kmers_to_graph_index
 from kmer_mapper.util import remap_array
 from scipy.ndimage import convolve1d
 import pandas as pd
@@ -23,6 +24,9 @@ from .util import log_memory_usage_now
 from .kmers import KmerHash, TwoBitHash
 from npstructures import Counter
 
+
+def map_kmers_to_graph_index_wrapper(*args):
+    return map_kmers_to_graph_index(*args)
 
 def get_reads_as_matrices(read_file_name, chunk_size=500000, max_read_length=150):
     return (chunk for chunk in read_fasta_into_chunks(read_file_name, chunk_size, max_read_length))
@@ -133,6 +137,7 @@ def map_fasta_single_thread_with_numpy_parsing(data):
     time_start = time.perf_counter()
     reads, args = data
 
+    logging.info("Reeading chunk of reads from shared memory")
     raw_chunk = from_shared_memory(args.buffer_type, reads)
     sequence_chunk = raw_chunk.get_sequences()
     logging.info("Size of sequence chunk (GB): %.3f" % (sequence_chunk.nbytes() / 1000000000))
@@ -152,6 +157,7 @@ def map_fasta_single_thread_with_numpy_parsing(data):
         counter.counter.count(hashes.astype(np.int64))
         logging.info("Done counting, took %.3f sec" % (time.perf_counter()-t_before_count))
     else:
+        logging.info("Using cython counter")
         kmer_index = from_shared_memory(KmerIndex, args.kmer_index)
         node_counts += map_kmers_to_graph_index(kmer_index, args.max_node_id, hashes, args.max_hits_per_kmer)
     logging.info("Getting node counts took %.3f sec" % (time.perf_counter()-t))
@@ -166,6 +172,8 @@ def map_fasta(args, kmer_index):
         args.kmer_index = to_shared_memory(kmer_index)
     else:
         args.kmer_index = kmer_index
+
+    logging.info("Done putting in shared memory")
 
     start_time = time.time()
 
@@ -186,6 +194,8 @@ def map_fasta(args, kmer_index):
     i = 0
     data = zip(reads, repeat(args))
 
+    logging.info(func)
+    logging.info(args)
 
     for result in pool.imap(func, data, chunksize=1):
     #for result in map(func, data):
