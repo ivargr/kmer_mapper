@@ -43,7 +43,7 @@ def map_fasta_command(args):
             logging.error("Either a kmer index (-i) or an index bundle (-b) needs to be specified")
             sys.exit(1)
         else:
-            kmer_index = IndexBundle.from_file(args.index_bundle).indexes
+            kmer_index = IndexBundle.from_file(args.index_bundle).indexes["KmerIndex"]
             kmer_index.convert_to_int32()
             kmer_index.remove_ref_offsets()  # not needed, will save us some memory
     else:
@@ -56,9 +56,9 @@ def map_fasta_command(args):
             kmer_index = cls.from_file(args.kmer_index)
             kmer_index.convert_to_int32()
             kmer_index.remove_ref_offsets()  # not needed, will save us some memory
-            args.max_node_id = kmer_index.max_node_id()
-            logging.info("Max node id is %d" % args.max_node_id)
 
+    args.max_node_id = kmer_index.max_node_id()
+    logging.info("Max node id is %d" % args.max_node_id)
     map_fasta(args, kmer_index)
 
 
