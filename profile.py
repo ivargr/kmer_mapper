@@ -3,7 +3,7 @@ import sys
 logging.basicConfig(level=logging.INFO)
 import numpy as np
 import time
-from kmer_mapper import map_kmers_to_graph_index
+from kmer_mapper.mapper import map_kmers_to_graph_index
 from npstructures import Counter
 from graph_kmer_index import KmerIndex, CounterKmerIndex
 from kmer_mapper.parser import BufferedNumpyParser, OneLineFastaBuffer2Bit

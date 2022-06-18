@@ -1,7 +1,7 @@
 import time
 import logging
 from graph_kmer_index import KmerIndex
-from kmer_mapper.parser import OneLineFastaParser, KmerHash
+from kmer_mapper.parser import OneLineFastaParser
 import numpy as np
 #from kmer_mapper.numpy_mapping import get_index_positions
 

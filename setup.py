@@ -5,7 +5,7 @@ from distutils.extension import Extension
 from Cython.Distutils import build_ext
 import numpy as np
 
-"""
+
 ext_modules=[
     Extension("kmer_mapper.mapper",
               ["kmer_mapper/mapper.pyx"],
@@ -13,7 +13,6 @@ ext_modules=[
               extra_compile_args = ["-O3", "-march=native"],
               )
       ]
-"""
 
 setup(name='kmer_mapper',
       version='0.0.18',
@@ -33,9 +32,9 @@ setup(name='kmer_mapper',
             'console_scripts': ['kmer_mapper=kmer_mapper.command_line_interface:main']
       },
       cmdclass = {"build_ext": build_ext},
-      #ext_modules = ext_modules
+      ext_modules = ext_modules,
       include_dirs=np.get_include(),
-      ext_modules=cythonize("kmer_mapper/mapper.pyx"),
+      #ext_modules=cythonize("kmer_mapper/mapper.pyx"),
 )
 
 """

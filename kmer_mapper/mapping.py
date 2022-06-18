@@ -12,7 +12,7 @@ from scipy.ndimage import convolve1d
 import pandas as pd
 import scipy.signal
 from graph_kmer_index import KmerIndex
-from shared_memory_wrapper import from_shared_memory, to_shared_memory, SingleSharedArray
+from shared_memory_wrapper import from_shared_memory, to_shared_memory, SingleSharedArray, object_to_shared_memory
 from shared_memory_wrapper.shared_memory import get_shared_pool, close_shared_pool, object_from_shared_memory
 from pathos.multiprocessing import Pool
 from itertools import repeat
@@ -206,3 +206,67 @@ def map_fasta(args, kmer_index):
     logging.info("Spent %.3f sec in total mapping kmers using %d threads" % (time.time()-start_time, args.n_threads))
 
     close_shared_pool()
+    
+from bionumpy.kmers import fast_hash
+from bionumpy.kmers import KmerEncoding
+
+
+def _parallel_sequence_map_wrapper(data):
+    index_id, max_node_id, k, sequence_id= data
+
+    sequence = object_from_shared_memory(sequence_id)
+    sequence = sequence.astype(np.int64)
+    hasher = KmerEncoding(k, None, 4)
+    hashes = hasher.rolling_window(sequence)
+    kmers = hashes.astype(np.uint64)
+    index = object_from_shared_memory(index_id)
+    return map_kmers_to_graph_index(index, max_node_id, kmers)
+
+
+def _parallel_map_wrapper(data):
+    index_id, max_node_id, kmer_id = data
+    kmers = object_from_shared_memory(kmer_id)
+    index = object_from_shared_memory(index_id)
+    return map_kmers_to_graph_index(index, max_node_id, kmers)
+
+
+class ParalellMapper:
+    def __init__(self, kmer_index, max_node_id, n_threads=8):
+        t = time.perf_counter()
+        self._max_node_id = max_node_id
+        self._kmer_mapper = kmer_index
+        self._kmer_mapper = object_to_shared_memory(kmer_index)
+        self._n_threads = n_threads
+        self._counts = np.zeros(max_node_id, dtype=np.uint32)
+        self._pool = get_shared_pool(self._n_threads)
+        logging.info("Time spent initing ParallellMapper: %.4f" % (time.perf_counter()-t))
+
+
+    def map_numeric_sequence(self, numeric_sequence, k):
+        t = time.perf_counter()
+        assert numeric_sequence.dtyp == np.uint8
+        sequences = np.array_split(numeric_sequence, self._n_threads)
+        logging.info("time spent splitting sequences: %.3f" % (time.perf_counter()-t))
+
+        t = time.perf_counter()
+        sequences = [object_to_shared_memory(k) for k in sequences]
+        logging.info("time spent writing sequences to shared memory: %.3f" % (time.perf_counter()-t))
+        for result in self._pool.imap(_parallel_sequence_map_wrapper,
+                                      zip(itertools.repeat(self._kmer_mapper), itertools.repeat(self._max_node_id - 1), itertools.repeat(k),
+                                          sequences)):
+            self._counts += result
+
+    def map(self, kmers):
+        assert kmers.dtype == np.uint64
+        kmers = np.array_split(kmers, self._n_threads)
+        kmers = (object_to_shared_memory(k) for k in kmers)
+        for result in self._pool.imap(_parallel_map_wrapper,
+                                      zip(itertools.repeat(self._kmer_mapper), itertools.repeat(self._max_node_id-1), kmers)):
+            self._counts += result
+
+    def get_results(self):
+        #logging.info("Sum of counts: %d" % np.sum(self._counts))
+        return self._counts
+
+    def reset(self):
+        self._counts[:] = 0
