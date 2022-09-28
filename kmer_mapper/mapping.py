@@ -23,6 +23,8 @@ from .parser import OneLineFastaParser, Sequences, OneLineFastaParser2bit, Buffe
 from .util import log_memory_usage_now
 from .kmers import KmerHash, TwoBitHash
 from npstructures import Counter
+from bionumpy.kmers import fast_hash
+import bionumpy as bnp
 
 
 def map_kmers_to_graph_index_wrapper(*args):
@@ -212,15 +214,24 @@ from bionumpy.kmers import KmerEncoding
 
 
 def _parallel_sequence_map_wrapper(data):
-    index_id, max_node_id, k, sequence_id= data
-
+    index_id, max_node_id, k, sequence_id = data
     sequence = object_from_shared_memory(sequence_id)
-    sequence = sequence.astype(np.int64)
-    hasher = KmerEncoding(k, None, 4)
-    hashes = hasher.rolling_window(sequence)
-    kmers = hashes.astype(np.uint64)
+    sequence = sequence.ravel()  # .astype(np.int64)
+    print("Sequence: %s" % sequence)
+    #hasher = KmerEncoding(k, None, 4)
+    #hashes = hasher.rolling_window(sequence)
+    #kmers = hashes.astype(np.uint64)
+    t0 = time.perf_counter()
+    kmers = fast_hash(sequence[::-1], k).astype(np.uint64)
+    logging.info("Hashing %d kmers took %.4f sec" % (len(kmers), time.perf_counter()-t0))
     index = object_from_shared_memory(index_id)
-    return map_kmers_to_graph_index(index, max_node_id, kmers)
+
+    print(kmers)
+
+    t0 = time.perf_counter()
+    mapped = map_kmers_to_graph_index(index, max_node_id, kmers)
+    logging.info("Mapping %d kmers took %.4f sec" % (len(kmers), time.perf_counter()-t0))
+    return mapped
 
 
 def _parallel_map_wrapper(data):
@@ -241,6 +252,17 @@ class ParalellMapper:
         self._pool = get_shared_pool(self._n_threads)
         logging.info("Time spent initing ParallellMapper: %.4f" % (time.perf_counter()-t))
 
+    def map_reads_file(self, read_file_name, k, chunk_size=10000000):
+        chunks = bnp.open(read_file_name, chunk_size=chunk_size)
+        #chunks = (chunk.sequence.ravel() for chunk in chunks)
+        sequences = (object_to_shared_memory(chunk.sequence) for chunk in chunks)
+
+        for result in self._pool.imap(_parallel_sequence_map_wrapper,
+                                  zip(itertools.repeat(self._kmer_mapper), itertools.repeat(self._max_node_id - 1),
+                                      itertools.repeat(k),
+                                      sequences)):
+            print(np.sum(result))
+            self._counts += result
 
     def map_numeric_sequence(self, numeric_sequence, k):
         t = time.perf_counter()
@@ -250,8 +272,12 @@ class ParalellMapper:
 
         t = time.perf_counter()
         sequences = [object_to_shared_memory(k) for k in sequences]
+        func = self._pool.imap
+        if self._n_threads == 1:
+            func = map
+
         logging.info("time spent writing sequences to shared memory: %.3f" % (time.perf_counter()-t))
-        for result in self._pool.imap(_parallel_sequence_map_wrapper,
+        for result in func(_parallel_sequence_map_wrapper,
                                       zip(itertools.repeat(self._kmer_mapper), itertools.repeat(self._max_node_id - 1), itertools.repeat(k),
                                           sequences)):
             self._counts += result
