@@ -1,6 +1,12 @@
 import logging
+import os
 import time
 import sys
+
+import tqdm
+
+from .kmers import TwoBitHash
+
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
 
 import pyximport
@@ -14,13 +20,14 @@ from graph_kmer_index import KmerIndex
 from .mapping import map_fasta
 from graph_kmer_index.index_bundle import IndexBundle
 from .kmer_lookup import Advanced2
-from shared_memory_wrapper.shared_memory import remove_shared_memory_in_session
+from shared_memory_wrapper.shared_memory import remove_shared_memory_in_session, remove_shared_memory
 from shared_memory_wrapper.shared_memory import get_shared_pool, close_shared_pool
 from shared_memory_wrapper import from_file, object_to_shared_memory, object_from_shared_memory
+from shared_memory_wrapper.util import AddReducerWithSharedMemory, parallel_map_reduce
 import bionumpy as bnp
 from kmer_mapper.mapper import map_kmers_to_graph_index
 from bionumpy.kmers import fast_hash
-from bionumpy.encodings import ACTGTwoBitEncoding
+from bionumpy.encodings import ACTGTwoBitEncoding, ACTGEncoding
 
 
 def main():
@@ -71,60 +78,61 @@ def map_fasta_command(args):
     map_fasta(args, kmer_index)
 
 
+def _mapper(kmer_size, kmer_index, chunk_sequence_name):
+    t = time.perf_counter()
+    chunk_sequence = object_from_shared_memory(chunk_sequence_name)
+    hashes = fast_hash(chunk_sequence, kmer_size, encoding=None).ravel()
+    hashes = ACTGTwoBitEncoding.complement(hashes) & np.uint64(4 ** kmer_size - 1)
+    mapped = map_kmers_to_graph_index(kmer_index, kmer_index.max_node_id(), hashes)
+    #logging.info("Chunk of %d reads took %.2f sec" % (len(chunk_sequence), time.perf_counter()-t))
+    remove_shared_memory(chunk_sequence_name)
+    t = time.perf_counter()
+    return mapped
+
+
 def map_bnp(args):
     get_shared_pool(args.n_threads)
     k = args.kmer_size
 
     kmer_index = _get_kmer_index_from_args(args)
 
+    start_time = time.perf_counter()
+
     hash_time = 0
     t_start = time.perf_counter()
 
-    chunks = bnp.open(args.reads, chunk_size=args.chunk_size)
-    n_processed = 0
-    for chunk in chunks:
-        #print(type(chunk.sequence.dtype))
-        #print(chunk.to_sequences())
-        t0 = time.perf_counter()
-        #hashes = chunk.sequence
-        hashes = fast_hash(chunk.sequence, args.kmer_size).ravel().astype(np.uint64)
-        hashes = ACTGTwoBitEncoding.complement(hashes) & np.uint64(4**k-1)
-        hashes_copy = np.zeros_like(hashes)
+    # file  = bnp.open(args.reads)
+    buffer_type = None
+    if args.reads.split(".")[-1] == ".fa":
+        # we force TwoLineFastaBuffer to get some speedup
+        buffer_type = bnp.TwoLineFastaBuffer
 
-        hash_time += time.perf_counter()-t0
-        #hashes[0] = 11
-        print(hashes[::-1])
-        print(hashes)
+    n_bytes = os.stat(args.reads).st_size
+    approx_number_of_chunks = int(n_bytes / args.chunk_size)
+    logging.info("Approx number of chunks based on file size: %d" % approx_number_of_chunks)
 
+    file = bnp.open(args.reads, buffer_type=buffer_type)
+    chunks = tqdm.tqdm((object_to_shared_memory(chunk.sequence) for chunk in file.read_chunks(args.chunk_size)), total=approx_number_of_chunks)
 
-        mapped = map_kmers_to_graph_index(kmer_index, kmer_index.max_node_id(), hashes_copy)
-        print(mapped)
-        print("Mapped: %d" % np.sum(mapped))
+    from shared_memory_wrapper.util import parallel_map_reduce_with_adding
+    from shared_memory_wrapper.shared_array_map_reduce import additative_shared_array_map_reduce
+    node_counts = additative_shared_array_map_reduce(_mapper,
+                                                     chunks,
+                                                     np.zeros(kmer_index.max_node_id()+1),
+                                                     (args.kmer_size, kmer_index),
+                                                     n_threads=args.n_threads
+                                                     )
 
+    np.save(args.output_file, node_counts)
+    logging.info("Saved node counts to %s.npy" % args.output_file)
+    logging.info("Spent %.3f sec in total mapping kmers using %d threads" % (time.perf_counter()-start_time, args.n_threads))
+    close_shared_pool()
 
-        id = object_to_shared_memory(chunk.sequence)
-        sequence2 = object_from_shared_memory(id)
-
-        n_processed += len(chunk.sequence)
-        logging.info("%d reads processed. Hash time: %.3f" % (n_processed, hash_time))
-
-        print(type(chunk.sequence.ravel()))
 
     logging.info("Hash time: %.3f" % (hash_time))
     logging.info("Total time: %.3f" % (time.perf_counter()-t_start))
     close_shared_pool()
     return
-
-    """
-    mapper = ParalellMapper(kmer_index, kmer_index.max_node_id(), args.n_threads)
-    t = time.perf_counter()
-    mapper.map_reads_file(args.reads, args.kmer_size, args.chunk_size)
-    node_counts = mapper.get_results()
-    logging.info("Spent %.3f sec to map" % (time.perf_counter()-t))
-    close_shared_pool()
-    np.save(args.output_file, node_counts)
-    """
-
 
 
 

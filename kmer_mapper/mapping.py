@@ -150,6 +150,7 @@ def map_fasta_single_thread_with_numpy_parsing(data):
         logging.info("Using cython counter")
         kmer_index = from_shared_memory(KmerIndex, args.kmer_index)
         node_counts += map_kmers_to_graph_index(kmer_index, args.max_node_id, hashes, args.max_hits_per_kmer)
+
     logging.info("Getting node counts took %.3f sec" % (time.perf_counter()-t))
     logging.info("Done with chunk. Took %.3f sec" % (time.perf_counter()-time_start))
 
@@ -217,7 +218,6 @@ def _parallel_sequence_map_wrapper(data):
     index_id, max_node_id, k, sequence_id = data
     sequence = object_from_shared_memory(sequence_id)
     sequence = sequence.ravel()  # .astype(np.int64)
-    print("Sequence: %s" % sequence)
     #hasher = KmerEncoding(k, None, 4)
     #hashes = hasher.rolling_window(sequence)
     #kmers = hashes.astype(np.uint64)
@@ -226,7 +226,6 @@ def _parallel_sequence_map_wrapper(data):
     logging.info("Hashing %d kmers took %.4f sec" % (len(kmers), time.perf_counter()-t0))
     index = object_from_shared_memory(index_id)
 
-    print(kmers)
 
     t0 = time.perf_counter()
     mapped = map_kmers_to_graph_index(index, max_node_id, kmers)
@@ -261,7 +260,6 @@ class ParalellMapper:
                                   zip(itertools.repeat(self._kmer_mapper), itertools.repeat(self._max_node_id - 1),
                                       itertools.repeat(k),
                                       sequences)):
-            print(np.sum(result))
             self._counts += result
 
     def map_numeric_sequence(self, numeric_sequence, k):

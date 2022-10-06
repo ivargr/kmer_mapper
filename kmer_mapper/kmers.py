@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 from .parser import get_mask_from_intervals
 from .encodings import twobit_swap, ACTGTwoBitEncoding
@@ -54,7 +56,8 @@ class TwoBitHash:
         mask = get_kmer_mask(sequences.intervals, last_end, self.k)
         func = self.get_kmers_with_buffer if self._has_buffer(sequences) else self.get_kmers
         kmers = func(sequences.sequences.view(self._dtype))
-        return kmers.ravel()[:mask.size][mask] & self._mask
+        out = kmers.ravel()[:mask.size][mask] & self._mask
+        return out
 
     def get_kmer_hashes(self, sequences):
         return ACTGTwoBitEncoding.complement(self.get_new_kmer_hashes(sequences)) & self._dtype(4**self.k-1)
