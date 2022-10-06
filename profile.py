@@ -24,10 +24,10 @@ def get_kmer_hashes():
     return hashes
 
 def map_with_counter(kmers, index):
-    return index.count(kmers)
+    return index.count_kmers(kmers)
 
 
-def map_with_cython(reads, index):
+def _map_with_cython(reads, index):
     max_node_id = 83559391
     
     raw_chunk = from_shared_memory(OneLineFastaBuffer2Bit, reads)
@@ -39,9 +39,11 @@ def map_with_cython(reads, index):
     logging.info("Size of hashes (GB): %.3f" % (hashes.nbytes / 1000000000))
     logging.info("Time spent to get %d kmer hashes: %.3f" % (len(hashes), time.perf_counter() - t))
 
-    return map_kmers_to_graph_index(index, max_node_id, hashes, 1000)
 
-reads = get_kmer_hashes()
+def map_with_cython(hashes, index):
+    return map_kmers_to_graph_index(index, index.max_node_id(), hashes, 1000)
+
+#reads = get_kmer_hashes()
 
 #logging.info("N kmer hashes: %d" % len(kmers))
 
@@ -49,33 +51,33 @@ logging.info("Reading kmer index")
 kmer_index = KmerIndex.from_file(sys.argv[1])
 kmer_index.convert_to_int32()
 kmer_index.remove_ref_offsets()
+kmers = kmer_index._kmers
 
-logging.info("Writing to shared memory")
-kmer_index = to_shared_memory(kmer_index)
-kmer_index2 = from_shared_memory(KmerIndex, kmer_index)
-
-
+print(kmers)
+print("N kmers: %d" % len(kmers))
 
 logging.info("Making counter")
 #counter = Counter(index_kmers)
-#counter = from_file(sys.argv[3]).counter
+#counter = from_file(sys.argv[2]).counter
+counter = CounterKmerIndex.from_kmer_index(kmer_index)
 #kmers = np.concatenate([index_kmers for i in range(100)])
-
 
 
 logging.info("Getting kmers")
 
 #kmers = np.random.randint(0, 4**31, 96000000, dtype=np.int64)
 
+import bionumpy as bnp
+#file = bnp.open(sys.argv[3])
+#chunks = file.read_chunks()
 
 
-for i in range(0, 3):
-    #for function, index in [(map_with_counter, counter), (map_with_cython, kmer_index)]:
-    for function, index in [(map_with_cython, kmer_index2)]:
+for _ in range(3):
+    for function, index in [(map_with_counter, counter), (map_with_cython, kmer_index)]:
+    #for function, index in [(map_with_cython, kmer_index2)]:
         t = time.perf_counter()
-        function(next(reads), index)
+        function(kmers, index)
         print(str(function), time.perf_counter()-t)
-        log_memory_usage_now()
 
 
 

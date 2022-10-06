@@ -28,6 +28,8 @@ import bionumpy as bnp
 from kmer_mapper.mapper import map_kmers_to_graph_index
 from bionumpy.kmers import fast_hash
 from bionumpy.encodings import ACTGTwoBitEncoding, ACTGEncoding
+from shared_memory_wrapper.util import parallel_map_reduce_with_adding
+from shared_memory_wrapper.shared_array_map_reduce import additative_shared_array_map_reduce
 
 
 def main():
@@ -48,9 +50,14 @@ def _get_kmer_index_from_args(args):
         cls = KmerIndex
         if "minimal" in args.kmer_index:
             cls = MinimalKmerIndex
-        kmer_index = cls.from_file(args.kmer_index)
-        kmer_index.convert_to_int32()
-        kmer_index.remove_ref_offsets()  # not needed, will save us some memory
+        try:
+            kmer_index = cls.from_file(args.kmer_index)
+            kmer_index.convert_to_int32()
+            kmer_index.remove_ref_offsets()  # not needed, will save us some memory
+        except:
+            kmer_index = from_file(args.kmer_index)
+            assert isinstance(kmer_index, CounterKmerIndex)
+            logging.info("Kmer index is counter index")
 
     return kmer_index
 
@@ -80,13 +87,16 @@ def map_fasta_command(args):
 
 def _mapper(kmer_size, kmer_index, chunk_sequence_name):
     t = time.perf_counter()
-    chunk_sequence = object_from_shared_memory(chunk_sequence_name)
+    chunk_sequence = object_from_shared_memory(chunk_sequence_name).get_sequences()
     hashes = fast_hash(chunk_sequence, kmer_size, encoding=None).ravel()
     hashes = ACTGTwoBitEncoding.complement(hashes) & np.uint64(4 ** kmer_size - 1)
+
+    t0 = time.perf_counter()
     mapped = map_kmers_to_graph_index(kmer_index, kmer_index.max_node_id(), hashes)
-    #logging.info("Chunk of %d reads took %.2f sec" % (len(chunk_sequence), time.perf_counter()-t))
+    logging.info("Mapping took %.3f sec" % (time.perf_counter()-t0))
+
     remove_shared_memory(chunk_sequence_name)
-    t = time.perf_counter()
+    logging.info("Chunk of %d reads took %.2f sec" % (len(chunk_sequence), time.perf_counter()-t))
     return mapped
 
 
@@ -103,8 +113,9 @@ def map_bnp(args):
 
     # file  = bnp.open(args.reads)
     buffer_type = None
-    if args.reads.split(".")[-1] == ".fa":
+    if args.reads.split(".")[-1] == "fa":
         # we force TwoLineFastaBuffer to get some speedup
+        logging.info("Data is in fasta format. Using TwoLine-buffer to speed up reading")
         buffer_type = bnp.TwoLineFastaBuffer
 
     n_bytes = os.stat(args.reads).st_size
@@ -112,10 +123,10 @@ def map_bnp(args):
     logging.info("Approx number of chunks based on file size: %d" % approx_number_of_chunks)
 
     file = bnp.open(args.reads, buffer_type=buffer_type)
-    chunks = tqdm.tqdm((object_to_shared_memory(chunk.sequence) for chunk in file.read_chunks(args.chunk_size)), total=approx_number_of_chunks)
+    #chunks = tqdm.tqdm((object_to_shared_memory(chunk.sequence) for chunk in file.read_chunks(args.chunk_size)), total=approx_number_of_chunks)
+    chunks = (object_to_shared_memory(raw_chunk) for
+        raw_chunk in bnp.parser.NumpyFileReader(open(args.reads, "rb"), bnp.TwoLineFastaBuffer).read_chunks(chunk_size=args.chunk_size))
 
-    from shared_memory_wrapper.util import parallel_map_reduce_with_adding
-    from shared_memory_wrapper.shared_array_map_reduce import additative_shared_array_map_reduce
     node_counts = additative_shared_array_map_reduce(_mapper,
                                                      chunks,
                                                      np.zeros(kmer_index.max_node_id()+1),
