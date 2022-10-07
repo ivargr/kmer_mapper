@@ -4,14 +4,18 @@ import os
 import sys
 import time
 from pathlib import PurePath
+import tqdm
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+
+import numpy as np
+import warnings
+warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning) 
 
 import pyximport
 pyximport.install()
 
 from graph_kmer_index.collision_free_kmer_index import MinimalKmerIndex, CounterKmerIndex
-import numpy as np
 import argparse
 from graph_kmer_index import KmerIndex
 from .mapping import map_fasta
@@ -148,8 +152,8 @@ def map_bnp(args):
     n_bytes = os.stat(args.reads).st_size
     approx_number_of_chunks = int(n_bytes / args.chunk_size)
 
-    chunks = (object_to_shared_memory(raw_chunk) for
-        raw_chunk in file.read_chunks(chunk_size=args.chunk_size))
+    chunks = tqdm.tqdm((object_to_shared_memory(raw_chunk) for
+        raw_chunk in file.read_chunks(chunk_size=args.chunk_size)), total=approx_number_of_chunks)
 
     if isinstance(kmer_index, KmerIndex):
         initial_data = np.zeros(kmer_index.max_node_id()+1)

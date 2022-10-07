@@ -8,13 +8,9 @@ import numpy as np
 
 from kmer_mapper.mapper import map_kmers_to_graph_index
 from kmer_mapper.util import remap_array
-from scipy.ndimage import convolve1d
-import pandas as pd
-import scipy.signal
 from graph_kmer_index import KmerIndex
 from shared_memory_wrapper import from_shared_memory, to_shared_memory, SingleSharedArray, object_to_shared_memory
 from shared_memory_wrapper.shared_memory import get_shared_pool, close_shared_pool, object_from_shared_memory
-from pathos.multiprocessing import Pool
 from itertools import repeat
 from graph_kmer_index.collision_free_kmer_index import MinimalKmerIndex
 
