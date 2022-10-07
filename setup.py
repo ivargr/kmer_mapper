@@ -15,7 +15,7 @@ ext_modules=[
       ]
 
 setup(name='kmer_mapper',
-      version='0.0.20',
+      version='0.0.21',
       description='Kmer Mapper',
       url='http://github.com/ivargr/kmer_mapper',
       author='Ivar Grytten',
@@ -23,7 +23,7 @@ setup(name='kmer_mapper',
       license='MIT',
       packages=["kmer_mapper"],
       zip_safe=False,
-      install_requires=['numpy', 'cython', 'graph_kmer_index>=0.0.15', 'shared_memory_wrapper>=0.0.17', 'tqdm'],
+      install_requires=['numpy', 'cython', 'graph_kmer_index>=0.0.15', 'shared_memory_wrapper>=0.0.18', 'tqdm'],
       classifiers=[
             'Programming Language :: Python :: 3'
       ],
