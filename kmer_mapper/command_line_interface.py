@@ -217,7 +217,7 @@ def run_argument_parser(args):
     subparser.add_argument("-f", "--reads", required=True, help="Reads in .fa, .fq, .fa.gz, or fq.gz format")
     subparser.add_argument("-k", "--kmer-size", required=False, default=31, type=int)
     subparser.add_argument("-t", "--n-threads", required=False, default=16, type=int)
-    subparser.add_argument("-c", "--chunk-size", required=False, type=int, default=5000000,
+    subparser.add_argument("-c", "--chunk-size", required=False, type=int, default=100000000,
                            help="N bytes to process in each chunk")
     subparser.add_argument("-o", "--output-file", required=True)
     subparser.add_argument("-d", "--debug", required=False, help="Set to True to print debug log")
