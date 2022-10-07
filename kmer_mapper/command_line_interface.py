@@ -2,7 +2,8 @@ import logging
 import os
 import time
 import sys
-
+from pathlib import PurePath
+import gzip
 import tqdm
 
 from .kmers import TwoBitHash
@@ -92,12 +93,35 @@ def _mapper(kmer_size, kmer_index, chunk_sequence_name):
     hashes = ACTGTwoBitEncoding.complement(hashes) & np.uint64(4 ** kmer_size - 1)
 
     t0 = time.perf_counter()
-    mapped = map_kmers_to_graph_index(kmer_index, kmer_index.max_node_id(), hashes)
-    logging.info("Mapping took %.3f sec" % (time.perf_counter()-t0))
+    if isinstance(kmer_index, CounterKmerIndex):
+        mapped = kmer_index.counter.count(hashes, return_counts=True)._values
+        logging.info("Mapped with counter. Got values of length %d" % len(mapped))
+    else:
+        mapped = map_kmers_to_graph_index(kmer_index, kmer_index.max_node_id(), hashes)
+
+    logging.info("Mapping %d hashes took %.3f sec" % (len(hashes), time.perf_counter()-t0))
 
     remove_shared_memory(chunk_sequence_name)
     logging.info("Chunk of %d reads took %.2f sec" % (len(chunk_sequence), time.perf_counter()-t))
     return mapped
+
+
+def open_file(filename):
+    path = PurePath(filename)
+    suffix = path.suffixes[-1]
+    try:
+        buffer_type = bnp.files._get_buffer_type(suffix)
+    except RuntimeError:
+        logging.error("Unsupported file suffix %s" % suffix)
+        raise
+    
+    if path.suffixes[-1] == ".fa":
+        # override buffer type for some performance gain
+        buffer_type = bnp.TwoLineFastaBuffer
+        logging.info("Using buffer type TwoLineFastaBuffer")
+
+    open_func = gzip.open if suffix == ".gz" else open
+    return bnp.parser.NumpyFileReader(open_func(filename, "rb"), buffer_type)
 
 
 def map_bnp(args):
@@ -111,28 +135,37 @@ def map_bnp(args):
     hash_time = 0
     t_start = time.perf_counter()
 
-    # file  = bnp.open(args.reads)
-    buffer_type = None
-    if args.reads.split(".")[-1] == "fa":
-        # we force TwoLineFastaBuffer to get some speedup
-        logging.info("Data is in fasta format. Using TwoLine-buffer to speed up reading")
-        buffer_type = bnp.TwoLineFastaBuffer
 
     n_bytes = os.stat(args.reads).st_size
     approx_number_of_chunks = int(n_bytes / args.chunk_size)
     logging.info("Approx number of chunks based on file size: %d" % approx_number_of_chunks)
 
-    file = bnp.open(args.reads, buffer_type=buffer_type)
+    file = open_file(args.reads)
     #chunks = tqdm.tqdm((object_to_shared_memory(chunk.sequence) for chunk in file.read_chunks(args.chunk_size)), total=approx_number_of_chunks)
     chunks = (object_to_shared_memory(raw_chunk) for
         raw_chunk in bnp.parser.NumpyFileReader(open(args.reads, "rb"), bnp.TwoLineFastaBuffer).read_chunks(chunk_size=args.chunk_size))
 
+    if isinstance(kmer_index, KmerIndex):
+        initial_data = np.zeros(kmer_index.max_node_id()+1)
+    else:
+        initial_data = np.zeros_like(kmer_index.counter._values)
+
+    print("Initial data: ", initial_data)
+
     node_counts = additative_shared_array_map_reduce(_mapper,
                                                      chunks,
-                                                     np.zeros(kmer_index.max_node_id()+1),
+                                                     initial_data,
                                                      (args.kmer_size, kmer_index),
                                                      n_threads=args.n_threads
                                                      )
+
+    if isinstance(kmer_index, CounterKmerIndex):
+        # node counts is not node counts, but kmer counts
+        t = time.perf_counter()
+        kmer_index.counter._values = node_counts
+        node_counts = kmer_index.get_node_counts()
+        logging.info("Time spent getting node counts in the end: %.3f" % (time.perf_counter()-t))
+
 
     np.save(args.output_file, node_counts)
     logging.info("Saved node counts to %s.npy" % args.output_file)

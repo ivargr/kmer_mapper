@@ -10,6 +10,8 @@ from kmer_mapper.parser import BufferedNumpyParser, OneLineFastaBuffer2Bit
 from kmer_mapper.kmers import KmerHash, TwoBitHash
 from kmer_mapper.util import log_memory_usage_now
 from shared_memory_wrapper import from_file, to_shared_memory, from_shared_memory
+from profilehooks import profile
+
 
 def get_kmer_hashes():
     parser = BufferedNumpyParser.from_filename(sys.argv[2], 1250000 * 130)
@@ -23,8 +25,10 @@ def get_kmer_hashes():
 
     return hashes
 
+@profile
 def map_with_counter(kmers, index):
-    return index.count_kmers(kmers)
+    return index.counter.count(kmers, return_counts=True)
+    #return index.count_kmers(kmers)
 
 
 def _map_with_cython(reads, index):
@@ -43,22 +47,30 @@ def _map_with_cython(reads, index):
 def map_with_cython(hashes, index):
     return map_kmers_to_graph_index(index, index.max_node_id(), hashes, 1000)
 
+kmer_index = KmerIndex.from_file("tests/kmer_index_only_variants_with_revcomp.npz")
+kmer_index.convert_to_int32()
+kmer_index.remove_ref_offsets()
+
+#kmers = kmer_index._kmers
+#np.random.shuffle(kmers)
+
+kmers = np.random.randint(0, 10000000000, 300000000, dtype=np.uint64)
+#counter = CounterKmerIndex.from_kmer_index(kmer_index)
+
+
+
+
 #reads = get_kmer_hashes()
 
 #logging.info("N kmer hashes: %d" % len(kmers))
 
-logging.info("Reading kmer index")
-kmer_index = KmerIndex.from_file(sys.argv[1])
-kmer_index.convert_to_int32()
-kmer_index.remove_ref_offsets()
-kmers = kmer_index._kmers
 
 print(kmers)
 print("N kmers: %d" % len(kmers))
 
 logging.info("Making counter")
 #counter = Counter(index_kmers)
-#counter = from_file(sys.argv[2]).counter
+#counter = from_file("tests/counter_index.npz")
 counter = CounterKmerIndex.from_kmer_index(kmer_index)
 #kmers = np.concatenate([index_kmers for i in range(100)])
 
