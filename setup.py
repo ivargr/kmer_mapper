@@ -24,7 +24,7 @@ setup(name='kmer_mapper',
       packages=["kmer_mapper"],
       zip_safe=False,
       install_requires=['numpy', 'cython', 'graph_kmer_index>=0.0.15', 'pathos',
-                        'scipy', 'pandas', 'shared_memory_wrapper>=0.0.7'],
+                        'scipy', 'pandas', 'shared_memory_wrapper>=0.0.17'],
       classifiers=[
             'Programming Language :: Python :: 3'
       ],
