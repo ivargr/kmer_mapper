@@ -100,14 +100,18 @@ def map_fasta_command(args):
 
 
 def _mapper(kmer_size, kmer_index, chunk_sequence_name):
+    logging.debug("Starting _mapper with chunk %s" % chunk_sequence_name)
     t = time.perf_counter()
     chunk_sequence = object_from_shared_memory(chunk_sequence_name).get_sequences()
+    logging.debug("N sequences in chunk: %d" % len(chunk_sequence))
     hashes = fast_hash(chunk_sequence, kmer_size, encoding=None).ravel()
     hashes = ACTGTwoBitEncoding.complement(hashes) & np.uint64(4 ** kmer_size - 1)
+    logging.debug("N hashes: %d" % len(hashes))
 
     t0 = time.perf_counter()
     if isinstance(kmer_index, CounterKmerIndex):
-        mapped = kmer_index.counter.count(hashes, return_counts=True)._values
+        kmer_index.counter.count(hashes)
+        mapped = kmer_index.counter._values
         logging.debug("Mapped with counter. Got values of length %d" % len(mapped))
     else:
         mapped = map_kmers_to_graph_index(kmer_index, kmer_index.max_node_id(), hashes)
