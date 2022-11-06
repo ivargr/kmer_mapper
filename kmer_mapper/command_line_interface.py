@@ -99,14 +99,13 @@ def map_fasta_command(args):
     map_fasta(args, kmer_index)
 
 
-def _mapper(kmer_size, kmer_index, chunk_sequence_name):
+def _mapper(args, kmer_index, chunk_sequence_name):
+    kmer_size = args["kmer_size"]
     logging.debug("Starting _mapper with chunk %s" % chunk_sequence_name)
     t = time.perf_counter()
     chunk_sequence = object_from_shared_memory(chunk_sequence_name).get_sequences()
     logging.debug("N sequences in chunk: %d" % len(chunk_sequence))
-    hashes = fast_hash(chunk_sequence, kmer_size, encoding=None).ravel()
-    hashes = ACTGTwoBitEncoding.complement(hashes) & np.uint64(4 ** kmer_size - 1)
-    logging.debug("N hashes: %d" % len(hashes))
+    hashes = get_kmer_hashes_from_chunk_sequence(chunk_sequence, kmer_size)
 
     t0 = time.perf_counter()
     if isinstance(kmer_index, CounterKmerIndex):
@@ -121,6 +120,13 @@ def _mapper(kmer_size, kmer_index, chunk_sequence_name):
     remove_shared_memory(chunk_sequence_name)
     logging.debug("Chunk of %d reads took %.2f sec" % (len(chunk_sequence), time.perf_counter()-t))
     return mapped
+
+
+def get_kmer_hashes_from_chunk_sequence(chunk_sequence, kmer_size):
+    hashes = fast_hash(chunk_sequence, kmer_size, encoding=None).ravel()
+    hashes = ACTGTwoBitEncoding.complement(hashes) & np.uint64(4 ** kmer_size - 1)
+    logging.debug("N hashes: %d" % len(hashes))
+    return hashes
 
 
 def open_file(filename):
@@ -141,6 +147,25 @@ def open_file(filename):
     return bnp.parser.NumpyFileReader(open_func(filename, "rb"), buffer_type)
 
 
+def map_cuda(index, chunks, k):
+    from .gpu_counter import GpuCounter
+    logging.info("Making counter")
+    counter = GpuCounter.from_kmers_and_nodes(index._kmers, index._nodes)
+    counter.initialize_cuda(80000033)
+    logging.info("Counter initialized")
+
+    for i, chunk in enumerate(chunks):
+        t0 = time.perf_counter()
+        hashes = get_kmer_hashes_from_chunk_sequence(chunk.get_sequences(), k)
+        print("Time to get hashes for chunk ", (time.perf_counter()-t0))
+        t1 = time.perf_counter()
+        counter.count(hashes)
+        print("Time to count hashes for chunk: ", (time.perf_counter()-t1))
+        print("Whole chunk finished in ", (time.perf_counter()-t0))
+
+    return counter.get_node_counts(min_nodes=index.max_node_id())
+
+
 def map_bnp(args):
     if args.debug:
         logging.info("Will print debug log")
@@ -156,27 +181,35 @@ def map_bnp(args):
     n_bytes = os.stat(args.reads).st_size
     approx_number_of_chunks = int(n_bytes / args.chunk_size)
 
-    chunks = tqdm.tqdm((object_to_shared_memory(raw_chunk) for
-        raw_chunk in file.read_chunks(chunk_size=args.chunk_size)), total=approx_number_of_chunks)
 
-    if isinstance(kmer_index, KmerIndex):
-        initial_data = np.zeros(kmer_index.max_node_id()+1)
+    if args.gpu:
+        chunks = file.read_chunks(chunk_size=args.chunk_size)
+        node_counts = map_cuda(kmer_index, chunks, k)
     else:
-        initial_data = np.zeros_like(kmer_index.counter._values)
+        chunks = (object_to_shared_memory(raw_chunk) for
+                  raw_chunk in file.read_chunks(chunk_size=args.chunk_size))
+        chunks = tqdm.tqdm(chunks, total=approx_number_of_chunks)
 
-    node_counts = additative_shared_array_map_reduce(_mapper,
-                                                     chunks,
-                                                     initial_data,
-                                                     (args.kmer_size, kmer_index),
-                                                     n_threads=args.n_threads
-                                                     )
+        if isinstance(kmer_index, KmerIndex):
+            initial_data = np.zeros(kmer_index.max_node_id()+1)
+        else:
+            initial_data = np.zeros_like(kmer_index.counter._values)
 
-    if isinstance(kmer_index, CounterKmerIndex):
-        # node counts is not node counts, but kmer counts, get node counts
-        t = time.perf_counter()
-        kmer_index.counter._values = node_counts
-        node_counts = kmer_index.get_node_counts()
-        logging.info("Time spent getting node counts in the end: %.3f" % (time.perf_counter()-t))
+        args_dict = vars(args)
+        args_dict.pop("func")
+        node_counts = additative_shared_array_map_reduce(_mapper,
+                                                         chunks,
+                                                         initial_data,
+                                                         (args_dict, kmer_index),
+                                                         n_threads=args.n_threads
+                                                         )
+
+        if isinstance(kmer_index, CounterKmerIndex):
+            # node counts is not node counts, but kmer counts, get node counts
+            t = time.perf_counter()
+            kmer_index.counter._values = node_counts
+            node_counts = kmer_index.get_node_counts()
+            logging.info("Time spent getting node counts in the end: %.3f" % (time.perf_counter()-t))
 
 
     np.save(args.output_file, node_counts)
@@ -227,6 +260,11 @@ def run_argument_parser(args):
     subparser.add_argument("-d", "--debug", required=False, help="Set to True to print debug log")
     subparser.add_argument("-I", "--max-hits-per-kmer", required=False, default=1000, type=int,
                            help="Ignore kmers that have more than this amount of hits in index")
+    subparser.add_argument("-g", "--gpu", default=False, type=bool, help="Set to True to use GPU-counting. Experimental."
+                           " Requires suitable hardware and dependencies.")
+    subparser.add_argument("-r", "--map-reverse-complements", default=False, type=bool,
+                            help="Also count kmers in reverse complement of reads. "
+                                 "Default False. Not necessary if index contains reverse complements.")
     subparser.set_defaults(func=map_bnp)
 
 

@@ -88,18 +88,20 @@ def old():
 
 
 def new():
-    k = 31
+    k = 3
     import bionumpy as bnp
     #file = bnp.open("test.fa")
-    file = bnp.open("test.fa", buffer_type=bnp.TwoLineFastaBuffer)
+    file = bnp.open("single_read.fa", buffer_type=bnp.TwoLineFastaBuffer)
     for chunk in file.read_chunks(150000000):
-        hash = fast_hash(chunk.sequence, 13).ravel()
+        hash = fast_hash(chunk.sequence, k).ravel()
         # needed for same result
+        print(hash)
         hash = ACTGTwoBitEncoding.complement(hash) & np.uint64(4 ** k - 1)
+        print(hash)
 
 
 def _test():
-    for func in [old, new]:
+    for func in [new]:
         t0 = time.perf_counter()
         func()
         print(func, time.perf_counter()-t0)
