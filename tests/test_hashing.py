@@ -1,9 +1,9 @@
 import time
 
 import numpy as np
-from bionumpy import as_sequence_array
 from bionumpy.kmers import fast_hash
-from bionumpy.encodings import ACTGTwoBitEncoding, ACTGEncoding
+from bionumpy.encodings.alphabet_encoding import ACTGEncoding
+from bionumpy.encodings._legacy_encodings import ACTGTwoBitEncoding
 import bionumpy as bnp
 from kmer_mapper.kmers import TwoBitHash
 from kmer_mapper.parser import BufferedNumpyParser, OneLineFastaBuffer2Bit
@@ -14,7 +14,7 @@ def _test2():
     numeric_sequence = np.array(np.arange(35) % 4, dtype=np.uint8)
     #numeric_sequence = np.array([1, 1, 1, 1], dtype=np.uint8)
     k = 31
-    hash = fast_hash(numeric_sequence, k, encoding=None).ravel()
+    hash = bnp.kmers.fast_hash(numeric_sequence, k).ravel()
     print(hash)
 
     hashes_complement = ACTGTwoBitEncoding.complement(hash) & np.uint64(4**k-1)
@@ -86,16 +86,17 @@ def old():
     for chunk in parser.get_chunks():
         hashes = TwoBitHash(k=31).get_kmer_hashes(chunk.get_sequences())
 
+    print(hashes)
+
 
 def new():
     k = 3
     import bionumpy as bnp
     #file = bnp.open("test.fa")
-    file = bnp.open("single_read.fa", buffer_type=bnp.TwoLineFastaBuffer)
+    file = bnp.open("single_read.fa")
     for chunk in file.read_chunks(150000000):
-        hash = fast_hash(chunk.sequence, k).ravel()
+        hash = bnp.kmers.fast_hash(bnp.as_encoded_array(chunk.sequence, ACTGEncoding), k).ravel()
         # needed for same result
-        print(hash)
         hash = ACTGTwoBitEncoding.complement(hash) & np.uint64(4 ** k - 1)
         print(hash)
 

@@ -25,23 +25,10 @@ from shared_memory_wrapper.shared_memory import get_shared_pool
 from shared_memory_wrapper import from_file, object_to_shared_memory, object_from_shared_memory
 import bionumpy as bnp
 from kmer_mapper.mapper import map_kmers_to_graph_index
-from bionumpy.encodings import ACTGTwoBitEncoding, ACTGEncoding
+from bionumpy.encodings._legacy_encodings import ACTGTwoBitEncoding
+from bionumpy.encodings.alphabet_encoding import ACTGEncoding
 from shared_memory_wrapper.shared_array_map_reduce import additative_shared_array_map_reduce
 import npstructures
-
-
-# modified version of bionumpy's fast_hash
-# will use bionumpy's fast hash in the future
-@bnp.util.convolution
-def fast_hash(sequence, k, encoding=None):
-    sequence = bnp.sequences.as_encoded_sequence_array(sequence, ACTGEncoding)
-    if encoding:
-        sequence = encoding.encode(sequence)
-
-    bit_array = npstructures.bitarray.BitArray.pack(sequence, bit_stride=2)
-    hashes = bit_array.sliding_window(k)
-    return hashes
-
 
 
 
@@ -103,7 +90,7 @@ def _mapper(args, kmer_index, chunk_sequence_name):
     kmer_size = args["kmer_size"]
     logging.debug("Starting _mapper with chunk %s" % chunk_sequence_name)
     t = time.perf_counter()
-    chunk_sequence = object_from_shared_memory(chunk_sequence_name).get_sequences()
+    chunk_sequence = object_from_shared_memory(chunk_sequence_name).get_data().sequence
     logging.debug("N sequences in chunk: %d" % len(chunk_sequence))
     hashes = get_kmer_hashes_from_chunk_sequence(chunk_sequence, kmer_size)
 
@@ -123,7 +110,7 @@ def _mapper(args, kmer_index, chunk_sequence_name):
 
 
 def get_kmer_hashes_from_chunk_sequence(chunk_sequence, kmer_size):
-    hashes = fast_hash(chunk_sequence, kmer_size, encoding=None).ravel()
+    hashes = bnp.kmers.fast_hash(bnp.as_encoded_array(chunk_sequence, ACTGEncoding), kmer_size).ravel()
     hashes = ACTGTwoBitEncoding.complement(hashes) & np.uint64(4 ** kmer_size - 1)
     logging.debug("N hashes: %d" % len(hashes))
     return hashes
@@ -133,7 +120,7 @@ def open_file(filename):
     path = PurePath(filename)
     suffix = path.suffixes[-1]
     try:
-        buffer_type = bnp.files._get_buffer_type(suffix)
+        buffer_type = bnp.io.files._get_buffer_type(suffix)
     except RuntimeError:
         logging.error("Unsupported file suffix %s" % suffix)
         raise
@@ -144,7 +131,7 @@ def open_file(filename):
         logging.info("Using buffer type TwoLineFastaBuffer")
 
     open_func = gzip.open if suffix == ".gz" else open
-    return bnp.parser.NumpyFileReader(open_func(filename, "rb"), buffer_type)
+    return bnp.io.parser.NumpyFileReader(open_func(filename, "rb"), buffer_type)
 
 
 def map_cuda(index, chunks, k):
@@ -156,7 +143,8 @@ def map_cuda(index, chunks, k):
 
     for i, chunk in enumerate(chunks):
         t0 = time.perf_counter()
-        hashes = get_kmer_hashes_from_chunk_sequence(chunk.get_sequences(), k)
+        #hashes = get_kmer_hashes_from_chunk_sequence(chunk.get_sequences(), k)
+        hashes = get_kmer_hashes_from_chunk_sequence(chunk.get_data().sequence, k)
         print("Time to get hashes for chunk ", (time.perf_counter()-t0))
         t1 = time.perf_counter()
         counter.count(hashes)
@@ -183,11 +171,11 @@ def map_bnp(args):
 
 
     if args.gpu:
-        chunks = file.read_chunks(chunk_size=args.chunk_size)
+        chunks = file.read_chunks(min_chunk_size=args.chunk_size)
         node_counts = map_cuda(kmer_index, chunks, k)
     else:
         chunks = (object_to_shared_memory(raw_chunk) for
-                  raw_chunk in file.read_chunks(chunk_size=args.chunk_size))
+                  raw_chunk in file.read_chunks(min_chunk_size=args.chunk_size))
         chunks = tqdm.tqdm(chunks, total=approx_number_of_chunks)
 
         if isinstance(kmer_index, KmerIndex):
