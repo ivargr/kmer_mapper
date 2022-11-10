@@ -85,30 +85,37 @@ def old():
     parser = BufferedNumpyParser.from_filename("test.fa", 150000000)
     for chunk in parser.get_chunks():
         hashes = TwoBitHash(k=31).get_kmer_hashes(chunk.get_sequences())
+        return hashes
 
     print(hashes)
 
 
 def new():
-    k = 3
+    k = 31
     import bionumpy as bnp
     #file = bnp.open("test.fa")
-    file = bnp.open("single_read.fa")
-    for chunk in file.read_chunks(150000000):
+    file = bnp.open("test.fa")
+    for chunk in file.read_chunks(min_chunk_size=150000000):
         hash = bnp.kmers.fast_hash(bnp.as_encoded_array(chunk.sequence, ACTGEncoding), k).ravel()
         # needed for same result
         hash = ACTGTwoBitEncoding.complement(hash) & np.uint64(4 ** k - 1)
         print(hash)
+        return hash
 
 
-def _test():
-    for func in [new]:
+def test():
+    hashes = []
+    for func in [old, new]:
         t0 = time.perf_counter()
-        func()
+        result = func()
+        hashes.append(result)
         print(func, time.perf_counter()-t0)
+
+    print(hashes)
+    assert np.all(hashes[0] == hashes[1])
 
 
 
 
 if __name__ == "__main__":
-    _test()
+    test()
