@@ -1,4 +1,5 @@
 from kmer_mapper.mapper import map_kmers_to_graph_index
+import pytest
 from graph_kmer_index import sequence_to_kmer_hash, letter_sequence_to_numeric
 from graph_kmer_index.read_kmers import ReadKmers
 from Bio import Seq
@@ -27,6 +28,7 @@ def true_kmers_from_sequences(file_name, k=3):
     return np.unique(kmers, return_counts=True)
 
 
+@pytest.mark.skip()
 def test_map_to_kmer_index():
     node_kmers = ["ACT", "CTT", "cCG", "ATT"]
     nodes = np.arange(len(node_kmers), dtype=np.uint32)
@@ -42,12 +44,14 @@ def test_map_to_kmer_index():
     print(node_counts)
 
 
+@pytest.mark.skip()
 def __test_runtime():
     start = time.time()
     kmers = get_kmers_from_fasta("tests/hg002_simulated_reads_15x.fa", k=31, max_read_length=150, chunk_size=50000, return_only_kmers=True)
     end = time.time()
     print("Total time: %.4f" % (end-start))
 
+@pytest.mark.skip()
 def __test_map_to_index():
     index = KmerIndex.from_file("tests/kmer_index_only_variants.npz")
     start = time.time()

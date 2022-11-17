@@ -7,6 +7,7 @@ class GpuCounter:
         self.unique_kmers = unique_kmers
         self.kmers = kmers
         self.nodes = nodes
+        self.counter = None
 
     def initialize_cuda(self, modulo):
         from cucounter.counter import Counter

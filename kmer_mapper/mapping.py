@@ -19,7 +19,6 @@ from .parser import OneLineFastaParser, Sequences, OneLineFastaParser2bit, Buffe
 from .util import log_memory_usage_now
 from .kmers import KmerHash, TwoBitHash
 from npstructures import Counter
-from bionumpy.kmers import fast_hash
 import bionumpy as bnp
 
 
@@ -204,11 +203,9 @@ def map_fasta(args, kmer_index):
 
     close_shared_pool()
     
-from bionumpy.kmers import fast_hash
-from bionumpy.kmers import KmerEncoding
-
 
 def _parallel_sequence_map_wrapper(data):
+    assert False, "bionumpy needs fix"
     index_id, max_node_id, k, sequence_id = data
     sequence = object_from_shared_memory(sequence_id)
     sequence = sequence.ravel()  # .astype(np.int64)

@@ -1,12 +1,13 @@
 import time
 
 import numpy as np
-from bionumpy.kmers import fast_hash
+from bionumpy.sequence import get_kmers
 from bionumpy.encodings.alphabet_encoding import ACTGEncoding
 from bionumpy.encodings._legacy_encodings import ACTGTwoBitEncoding
 import bionumpy as bnp
 from kmer_mapper.kmers import TwoBitHash
 from kmer_mapper.parser import BufferedNumpyParser, OneLineFastaBuffer2Bit
+from kmer_mapper.command_line_interface import get_kmer_hashes_from_chunk_sequence
 
 
 def _test2():
@@ -14,7 +15,7 @@ def _test2():
     numeric_sequence = np.array(np.arange(35) % 4, dtype=np.uint8)
     #numeric_sequence = np.array([1, 1, 1, 1], dtype=np.uint8)
     k = 31
-    hash = bnp.kmers.fast_hash(numeric_sequence, k).ravel()
+    hash = get_kmers(numeric_sequence, k).ravel()
     print(hash)
 
     hashes_complement = ACTGTwoBitEncoding.complement(hash) & np.uint64(4**k-1)
@@ -62,7 +63,7 @@ def _test3():
         #encoded_sequence = chunk.sequence.view(bnp.sequences.ASCIIText)
         sequence = chunk.sequence
         t0 = time.perf_counter()
-        hash = fast_hash(sequence, k).ravel()
+        hash = get_kmers(sequence, k).ravel()
         print("Time hashing: ", time.perf_counter()-t0)
 
         t0 = time.perf_counter()
@@ -87,8 +88,6 @@ def old():
         hashes = TwoBitHash(k=31).get_kmer_hashes(chunk.get_sequences())
         return hashes
 
-    print(hashes)
-
 
 def new():
     k = 31
@@ -96,9 +95,11 @@ def new():
     #file = bnp.open("test.fa")
     file = bnp.open("test.fa")
     for chunk in file.read_chunks(min_chunk_size=150000000):
-        hash = bnp.kmers.fast_hash(bnp.as_encoded_array(chunk.sequence, ACTGEncoding), k).ravel()
+
+        hash = get_kmer_hashes_from_chunk_sequence(chunk.sequence, k)
+        #hash = bnp.sequence.get_kmers(bnp.as_encoded_array(chunk.sequence, ACTGEncoding), k).ravel().raw()
         # needed for same result
-        hash = ACTGTwoBitEncoding.complement(hash) & np.uint64(4 ** k - 1)
+        #hash = ACTGTwoBitEncoding.complement(hash) & np.uint64(4 ** k - 1)
         print(hash)
         return hash
 

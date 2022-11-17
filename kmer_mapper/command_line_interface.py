@@ -110,7 +110,8 @@ def _mapper(args, kmer_index, chunk_sequence_name):
 
 
 def get_kmer_hashes_from_chunk_sequence(chunk_sequence, kmer_size):
-    hashes = bnp.kmers.fast_hash(bnp.as_encoded_array(chunk_sequence, ACTGEncoding), kmer_size).ravel()
+    hashes = bnp.sequence.get_kmers(
+        bnp.as_encoded_array(chunk_sequence, ACTGEncoding), kmer_size).ravel().raw().astype(np.uint64)
     hashes = ACTGTwoBitEncoding.complement(hashes) & np.uint64(4 ** kmer_size - 1)
     logging.debug("N hashes: %d" % len(hashes))
     return hashes
@@ -139,7 +140,7 @@ def map_cuda(index, chunks, k):
     logging.info("Making counter")
     counter = GpuCounter.from_kmers_and_nodes(index._kmers, index._nodes)
     counter.initialize_cuda(80000033)
-    logging.info("Counter initialized")
+    logging.info("CUDA counter initialized")
 
     for i, chunk in enumerate(chunks):
         t0 = time.perf_counter()
@@ -148,8 +149,8 @@ def map_cuda(index, chunks, k):
         print("Time to get hashes for chunk ", (time.perf_counter()-t0))
         t1 = time.perf_counter()
         counter.count(hashes)
-        print("Time to count hashes for chunk: ", (time.perf_counter()-t1))
-        print("Whole chunk finished in ", (time.perf_counter()-t0))
+        print("Time to count %d hashes for chunk: %.10f" % (len(hashes), time.perf_counter()-t1))
+        print("GPU: Whole chunk finished in ", (time.perf_counter()-t0))
 
     return counter.get_node_counts(min_nodes=index.max_node_id())
 
@@ -163,17 +164,18 @@ def map_bnp(args):
     kmer_index = _get_kmer_index_from_args(args)
 
     start_time = time.perf_counter()
-
-    file = open_file(args.reads)
-
     n_bytes = os.stat(args.reads).st_size
     approx_number_of_chunks = int(n_bytes / args.chunk_size)
 
 
     if args.gpu:
+        import cupy as cp
+        bnp.set_backend(cp)
+        file = open_file(args.reads)
         chunks = file.read_chunks(min_chunk_size=args.chunk_size)
         node_counts = map_cuda(kmer_index, chunks, k)
     else:
+        file = open_file(args.reads)
         chunks = (object_to_shared_memory(raw_chunk) for
                   raw_chunk in file.read_chunks(min_chunk_size=args.chunk_size))
         chunks = tqdm.tqdm(chunks, total=approx_number_of_chunks)
