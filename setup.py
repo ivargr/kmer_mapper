@@ -23,7 +23,7 @@ setup(name='kmer_mapper',
       license='MIT',
       packages=["kmer_mapper"],
       zip_safe=False,
-      install_requires=['numpy', 'bionumpy>=0.2.1', 'cython', 'graph_kmer_index>=0.0.21',
+      install_requires=['numpy', 'bionumpy>=0.2.4', 'cython', 'graph_kmer_index>=0.0.21',
                         'shared_memory_wrapper>=0.0.21', 'tqdm'],
       classifiers=[
             'Programming Language :: Python :: 3'

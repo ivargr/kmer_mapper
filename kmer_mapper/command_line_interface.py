@@ -111,8 +111,8 @@ def _mapper(args, kmer_index, chunk_sequence_name):
 
 def get_kmer_hashes_from_chunk_sequence(chunk_sequence, kmer_size):
     hashes = bnp.sequence.get_kmers(
-        bnp.as_encoded_array(chunk_sequence, ACTGEncoding), kmer_size).ravel().raw().astype(np.uint64)
-    hashes = ACTGTwoBitEncoding.complement(hashes) & np.uint64(4 ** kmer_size - 1)
+        bnp.as_encoded_array(chunk_sequence, bnp.DNAEncoding), kmer_size).ravel().raw().astype(np.uint64)
+    #hashes = ACTGTwoBitEncoding.complement(hashes) & np.uint64(4 ** kmer_size - 1)
     logging.debug("N hashes: %d" % len(hashes))
     return hashes
 
