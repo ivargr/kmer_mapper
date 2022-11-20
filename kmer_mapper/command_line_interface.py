@@ -1,8 +1,9 @@
 import logging
+import sys
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
+
 import os
-import sys
 import time
 import tqdm
 from .util import _get_kmer_index_from_args, get_kmer_hashes_from_chunk_sequence, open_file
@@ -138,8 +139,6 @@ def run_argument_parser(args):
         formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=50, width=100))
 
     subparsers = parser.add_subparsers()
-    subparser = subparsers.add_parser("legacy_map", help="Legacy mapper kept for backwards compatibility")
-
     subparser = subparsers.add_parser("map", help="Map reads to a kmer index")
     subparser.add_argument("-i", "--kmer-index", required=False)
     subparser.add_argument("-b", "--index-bundle", required=False)
