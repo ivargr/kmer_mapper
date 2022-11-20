@@ -120,38 +120,46 @@ def get_kmer_hashes_from_chunk_sequence(chunk_sequence, kmer_size):
 def open_file(filename):
     path = PurePath(filename)
     suffix = path.suffixes[-1]
+
+    if suffix == ".gz":
+        suffix = path.suffixes[-2]
+
     try:
         buffer_type = bnp.io.files._get_buffer_type(suffix)
     except RuntimeError:
         logging.error("Unsupported file suffix %s" % suffix)
         raise
     
-    if path.suffixes[-1] == ".fa":
+    if suffix == ".fa":
         # override buffer type for some performance gain
         buffer_type = bnp.TwoLineFastaBuffer
         logging.info("Using buffer type TwoLineFastaBuffer")
 
-    open_func = gzip.open if suffix == ".gz" else open
+    open_func = gzip.open if path.suffixes[-1] == ".gz" else open
     return bnp.io.parser.NumpyFileReader(open_func(filename, "rb"), buffer_type)
 
 
-def map_cuda(index, chunks, k):
+def map_cuda(index, chunks, k, map_reverse_complements=False):
     from .gpu_counter import GpuCounter
     logging.info("Making counter")
-    counter = GpuCounter.from_kmers_and_nodes(index._kmers, index._nodes)
-    counter.initialize_cuda(80000033)
+    counter = GpuCounter.from_kmers_and_nodes(index._kmers, index._nodes, k)
+    counter.initialize_cuda(130000001)
     logging.info("CUDA counter initialized")
 
+    t_start = time.perf_counter()
     for i, chunk in enumerate(chunks):
         t0 = time.perf_counter()
         #hashes = get_kmer_hashes_from_chunk_sequence(chunk.get_sequences(), k)
         hashes = get_kmer_hashes_from_chunk_sequence(chunk.get_data().sequence, k)
         print("Time to get hashes for chunk ", (time.perf_counter()-t0))
         t1 = time.perf_counter()
-        counter.count(hashes)
+        counter.count(hashes, count_revcomps=map_reverse_complements)
         print("Time to count %d hashes for chunk: %.10f" % (len(hashes), time.perf_counter()-t1))
         print("GPU: Whole chunk finished in ", (time.perf_counter()-t0))
 
+    logging.info("Time spent only on hashing and counting hashes: %.5f" % (time.perf_counter()-t_start))
+
+    print("Get node counts")
     return counter.get_node_counts(min_nodes=index.max_node_id())
 
 
@@ -173,8 +181,9 @@ def map_bnp(args):
         bnp.set_backend(cp)
         file = open_file(args.reads)
         chunks = file.read_chunks(min_chunk_size=args.chunk_size)
-        node_counts = map_cuda(kmer_index, chunks, k)
+        node_counts = map_cuda(kmer_index, chunks, k, args.map_reverse_complements)
     else:
+        assert not args.map_reverse_complements, "Mapping reverse complements only supported with GPU-mode for now"
         file = open_file(args.reads)
         chunks = (object_to_shared_memory(raw_chunk) for
                   raw_chunk in file.read_chunks(min_chunk_size=args.chunk_size))
@@ -187,12 +196,14 @@ def map_bnp(args):
 
         args_dict = vars(args)
         args_dict.pop("func")
+        t_before_map = time.perf_counter()
         node_counts = additative_shared_array_map_reduce(_mapper,
                                                          chunks,
                                                          initial_data,
                                                          (args_dict, kmer_index),
                                                          n_threads=args.n_threads
                                                          )
+        logging.info("Time spent only on hashing and counting hashes: %.4f" % (time.perf_counter()-t_before_map))
 
         if isinstance(kmer_index, CounterKmerIndex):
             # node counts is not node counts, but kmer counts, get node counts
