@@ -130,7 +130,6 @@ def map_bnp(args):
     remove_shared_memory_in_session()
 
 
-
 def run_argument_parser(args):
 
     parser = argparse.ArgumentParser(
@@ -151,13 +150,13 @@ def run_argument_parser(args):
     subparser.add_argument("-d", "--debug", required=False, help="Set to True to print debug log")
     subparser.add_argument("-I", "--max-hits-per-kmer", required=False, default=1000, type=int,
                            help="Ignore kmers that have more than this amount of hits in index")
-    subparser.add_argument("-g", "--gpu", default=False, type=bool, help="Set to True to use GPU-counting. Experimental."
+    subparser.add_argument("-g", "--gpu", default=False, type=bool,
+                           help="Set to True to use GPU-counting. Experimental."
                            " Requires suitable hardware and dependencies.")
     subparser.add_argument("-r", "--map-reverse-complements", default=False, type=bool,
                             help="Also count kmers in reverse complement of reads. "
                                  "Default False. Not necessary if index contains reverse complements.")
     subparser.set_defaults(func=map_bnp)
-
 
     if len(args) == 0:
         parser.print_help()
