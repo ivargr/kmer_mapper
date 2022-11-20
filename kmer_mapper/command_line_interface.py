@@ -1,13 +1,11 @@
-import gzip
 import logging
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+
 import os
 import sys
 import time
-from pathlib import PurePath
 import tqdm
-
-logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
-
+from .util import _get_kmer_index_from_args, get_kmer_hashes_from_chunk_sequence, open_file
 import numpy as np
 import warnings
 warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning) 
@@ -15,78 +13,23 @@ warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 import pyximport
 pyximport.install()
 
-from graph_kmer_index.collision_free_kmer_index import MinimalKmerIndex, CounterKmerIndex
+from graph_kmer_index.collision_free_kmer_index import CounterKmerIndex
 import argparse
 from graph_kmer_index import KmerIndex
-from .mapping import map_fasta
-from graph_kmer_index.index_bundle import IndexBundle
 from shared_memory_wrapper.shared_memory import remove_shared_memory_in_session, remove_shared_memory
 from shared_memory_wrapper.shared_memory import get_shared_pool
-from shared_memory_wrapper import from_file, object_to_shared_memory, object_from_shared_memory
+from shared_memory_wrapper import object_to_shared_memory, object_from_shared_memory
 import bionumpy as bnp
 from kmer_mapper.mapper import map_kmers_to_graph_index
-from bionumpy.encodings._legacy_encodings import ACTGTwoBitEncoding
-from bionumpy.encodings.alphabet_encoding import ACTGEncoding
 from shared_memory_wrapper.shared_array_map_reduce import additative_shared_array_map_reduce
-import npstructures
-
 
 
 def main():
     run_argument_parser(sys.argv[1:])
 
 
-def _get_kmer_index_from_args(args):
-    # allowing multiple ways to specify kmer index, try to get the index
-    if args.kmer_index is None:
-        if args.index_bundle is None:
-            logging.error("Either a kmer index (-i) or an index bundle (-b) needs to be specified")
-            sys.exit(1)
-        else:
-            kmer_index = IndexBundle.from_file(args.index_bundle).indexes["KmerIndex"]
-            kmer_index.convert_to_int32()
-            kmer_index.remove_ref_offsets()  # not needed, will save us some memory
-    else:
-
-        cls = KmerIndex
-        if "minimal" in args.kmer_index:
-            cls = MinimalKmerIndex
-        try:
-            kmer_index = cls.from_file(args.kmer_index)
-            kmer_index.convert_to_int32()
-            kmer_index.remove_ref_offsets()  # not needed, will save us some memory
-        except:
-            kmer_index = from_file(args.kmer_index)
-            assert isinstance(kmer_index, CounterKmerIndex)
-            logging.info("Kmer index is counter index")
-
-    return kmer_index
-
-
-def map_fasta_command(args):
-    if args.kmer_size > 31:
-        logging.error("k must be 31 or lower")
-        sys.exit(1)
-
-    logging.info("Max read length is specified to %d" % args.max_read_length)
-    logging.info("Max hits per kmer: %d" % args.max_hits_per_kmer)
-
-    if not args.fasta_file.endswith(".fa"):
-        logging.error("Only fasta files (not fq or gzipped files) are supported to the argument -f. If you have another"
-                          "format, you can pipe fasta to kmer_mapper and use a dash as file name (-f -)")
-        sys.exit(1)
-
-    get_shared_pool(args.n_threads)
-    kmer_index = None
-
-    kmer_index = _get_kmer_index_from_args(args)
-
-    args.max_node_id = kmer_index.max_node_id()
-    logging.info("Max node id is %d" % args.max_node_id)
-    map_fasta(args, kmer_index)
-
-
-def _mapper(args, kmer_index, chunk_sequence_name):
+def map_cpu(args, kmer_index, chunk_sequence_name):
+    """Maps a sequence stored in shared memory to the kmer index"""
     kmer_size = args["kmer_size"]
     logging.debug("Starting _mapper with chunk %s" % chunk_sequence_name)
     t = time.perf_counter()
@@ -109,37 +52,8 @@ def _mapper(args, kmer_index, chunk_sequence_name):
     return mapped
 
 
-def get_kmer_hashes_from_chunk_sequence(chunk_sequence, kmer_size):
-    hashes = bnp.sequence.get_kmers(
-        bnp.as_encoded_array(chunk_sequence, bnp.DNAEncoding), kmer_size).ravel().raw().astype(np.uint64)
-    #hashes = ACTGTwoBitEncoding.complement(hashes) & np.uint64(4 ** kmer_size - 1)
-    logging.debug("N hashes: %d" % len(hashes))
-    return hashes
-
-
-def open_file(filename):
-    path = PurePath(filename)
-    suffix = path.suffixes[-1]
-
-    if suffix == ".gz":
-        suffix = path.suffixes[-2]
-
-    try:
-        buffer_type = bnp.io.files._get_buffer_type(suffix)
-    except RuntimeError:
-        logging.error("Unsupported file suffix %s" % suffix)
-        raise
-    
-    if suffix == ".fa":
-        # override buffer type for some performance gain
-        buffer_type = bnp.TwoLineFastaBuffer
-        logging.info("Using buffer type TwoLineFastaBuffer")
-
-    open_func = gzip.open if path.suffixes[-1] == ".gz" else open
-    return bnp.io.parser.NumpyFileReader(open_func(filename, "rb"), buffer_type)
-
-
-def map_cuda(index, chunks, k, map_reverse_complements=False):
+def map_gpu(index, chunks, k, map_reverse_complements=False):
+    """Maps a generator of chunks to the index (no shared memory)"""
     from .gpu_counter import GpuCounter
     logging.info("Making counter")
     counter = GpuCounter.from_kmers_and_nodes(index._kmers, index._nodes, k)
@@ -149,17 +63,14 @@ def map_cuda(index, chunks, k, map_reverse_complements=False):
     t_start = time.perf_counter()
     for i, chunk in enumerate(chunks):
         t0 = time.perf_counter()
-        #hashes = get_kmer_hashes_from_chunk_sequence(chunk.get_sequences(), k)
         hashes = get_kmer_hashes_from_chunk_sequence(chunk.get_data().sequence, k)
-        print("Time to get hashes for chunk ", (time.perf_counter()-t0))
+        logging.info("Time to get hashes for chunk ", (time.perf_counter()-t0))
         t1 = time.perf_counter()
         counter.count(hashes, count_revcomps=map_reverse_complements)
-        print("Time to count %d hashes for chunk: %.10f" % (len(hashes), time.perf_counter()-t1))
-        print("GPU: Whole chunk finished in ", (time.perf_counter()-t0))
+        logging.info("Time to count %d hashes for chunk: %.10f" % (len(hashes), time.perf_counter()-t1))
+        logging.info("GPU: Whole chunk finished in ", (time.perf_counter()-t0))
 
     logging.info("Time spent only on hashing and counting hashes: %.5f" % (time.perf_counter()-t_start))
-
-    print("Get node counts")
     return counter.get_node_counts(min_nodes=index.max_node_id())
 
 
@@ -175,13 +86,12 @@ def map_bnp(args):
     n_bytes = os.stat(args.reads).st_size
     approx_number_of_chunks = int(n_bytes / args.chunk_size)
 
-
     if args.gpu:
         import cupy as cp
         bnp.set_backend(cp)
         file = open_file(args.reads)
         chunks = file.read_chunks(min_chunk_size=args.chunk_size)
-        node_counts = map_cuda(kmer_index, chunks, k, args.map_reverse_complements)
+        node_counts = map_gpu(kmer_index, chunks, k, args.map_reverse_complements)
     else:
         assert not args.map_reverse_complements, "Mapping reverse complements only supported with GPU-mode for now"
         file = open_file(args.reads)
@@ -197,7 +107,7 @@ def map_bnp(args):
         args_dict = vars(args)
         args_dict.pop("func")
         t_before_map = time.perf_counter()
-        node_counts = additative_shared_array_map_reduce(_mapper,
+        node_counts = additative_shared_array_map_reduce(map_cpu,
                                                          chunks,
                                                          initial_data,
                                                          (args_dict, kmer_index),
@@ -229,25 +139,6 @@ def run_argument_parser(args):
 
     subparsers = parser.add_subparsers()
     subparser = subparsers.add_parser("legacy_map", help="Legacy mapper kept for backwards compatibility")
-    subparser.add_argument("-i", "--kmer-index", required=False)
-    subparser.add_argument("-b", "--index-bundle", required=False)
-    subparser.add_argument("-f", "--fasta-file", required=True)
-    subparser.add_argument("-k", "--kmer-size", required=False, default=31, type=int)
-    subparser.add_argument("-t", "--n-threads", required=False, default=16, type=int)
-    subparser.add_argument("-c", "--chunk-size", required=False, type=int, default=500000, help="N reads to process in each chunk")
-    subparser.add_argument("-l", "--max-read-length", required=False, type=int, default=150,
-                           help="Maximum length of reads. Reads should not be longer than this.")
-    subparser.add_argument("-o", "--output-file", required=True)
-    subparser.add_argument("-n", "--use-numpy", required=False, type=bool, default=False, help="Use numpy-based counting instead of Cython")
-    #subparser.add_argument("-N", "--use-cython-file-reading", required=False, type=bool, default=False, help="Use cython-based file reading instead of Cython")
-    #subparser.add_argument("-m", "--no-shared-memory", required=False, type=bool, default=False, help="Set to True to not use shared memory for index. Increases memory usage by a factor of --n-threads.")
-    #subparser.add_argument("-r", "--include-reverse-complement", required=False, default=False, type=bool)
-    #subparser.add_argument("-T", "--use-numpy-parsing", required=False, default=False, type=bool)
-    subparser.add_argument("-I", "--max-hits-per-kmer", required=False, default=1000, type=int,
-                           help="Ignore kmers that have more than this amount of hits in index")
-    subparser.set_defaults(func=map_fasta_command)
-
-
 
     subparser = subparsers.add_parser("map", help="Map reads to a kmer index")
     subparser.add_argument("-i", "--kmer-index", required=False)

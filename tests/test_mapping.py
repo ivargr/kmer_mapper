@@ -44,23 +44,6 @@ def test_map_to_kmer_index():
     print(node_counts)
 
 
-@pytest.mark.skip()
-def __test_runtime():
-    start = time.time()
-    kmers = get_kmers_from_fasta("tests/hg002_simulated_reads_15x.fa", k=31, max_read_length=150, chunk_size=50000, return_only_kmers=True)
-    end = time.time()
-    print("Total time: %.4f" % (end-start))
-
-@pytest.mark.skip()
-def __test_map_to_index():
-    index = KmerIndex.from_file("tests/kmer_index_only_variants.npz")
-    start = time.time()
-    kmers = get_kmers_from_fasta("tests/hg002_simulated_reads_15x.fa", k=31, max_read_length=150, chunk_size=500000, return_only_kmers=True)
-    node_counts = map_kmers_to_graph_index(index, 10000000, kmers, 1000)
-    print(node_counts)
-    end = time.time()
-    print("Total time: %.4f" % (end-start))
-
 #test_get_kmers_from_fasta()
 #test_get_kmers_from_fasta()
 #test_map_to_index()
