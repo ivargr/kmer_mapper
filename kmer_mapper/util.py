@@ -8,7 +8,7 @@ import numpy as np
 import resource
 import logging
 
-from graph_kmer_index import CollisionFreeKmerIndex, CounterKmerIndex
+from graph_kmer_index import CollisionFreeKmerIndex, CounterKmerIndex, KmerIndex
 from graph_kmer_index.collision_free_kmer_index import MinimalKmerIndex
 from graph_kmer_index.index_bundle import IndexBundle
 from shared_memory_wrapper import from_file
