@@ -28,7 +28,7 @@ class GpuCounter:
         counts = np.zeros(len(self.kmers), dtype=np.uint32)
         chunk_size = 10_000_000
         start = 0
-        for chunk in np.array_split(self.kmers, len(self.kmers)//chunk_size):
+        for chunk in np.array_split(self.kmers, max(1, len(self.kmers)//chunk_size)):
             print("Querying chunk %d-%d" % (start, start+len(chunk)))
             counts[start:start+len(chunk)] = self.counter[chunk]
             start += len(chunk)

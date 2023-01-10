@@ -37,6 +37,12 @@ def log_memory_usage_now(logplace=""):
 
 def _get_kmer_index_from_args(args):
     # allowing multiple ways to specify kmer index, try to get the index
+    if isinstance(args.kmer_index, KmerIndex):
+        kmer_index = args.kmer_index
+        kmer_index.convert_to_int32()
+        kmer_index.remove_ref_offsets()
+        return kmer_index
+
     if args.kmer_index is None:
         if args.index_bundle is None:
             logging.error("Either a kmer index (-i) or an index bundle (-b) needs to be specified")

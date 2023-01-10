@@ -15,7 +15,6 @@ from libc.stdlib cimport free
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def map_kmers_to_graph_index(index, int max_node_id, np.uint64_t[::1] kmers, int max_index_lookup_frequency=1000):
-    logging.debug("Starting map_kmers_to_graph_index")
     t = time.perf_counter()
     # index arrays
     cdef np.int32_t[::1] hashes_to_index = index._hashes_to_index
@@ -39,19 +38,16 @@ def map_kmers_to_graph_index(index, int max_node_id, np.uint64_t[::1] kmers, int
 
     t = time.perf_counter()
     #cdef np.uint64_t[::1] kmer_hashes = np.mod(kmers, modulo)
-    #logging.info("Time spent taking modulo: %.4f" % (time.perf_counter()-t))
     cdef int n_collisions = 0
     cdef int n_kmers_mapped = 0
     cdef int n_skipped_high_frequency = 0
     cdef int n_no_index_hits = 0
     cdef unsigned long kmerhash
     t = time.perf_counter()
-    #logging.info("Will process %d kmers" % kmers.shape[0])
 
     #cdef np.uint32_t[::1] n_local_hits_array = n_kmers[kmer_hashes]
     #cdef np.int64_t[::1] index_position_array = hashes_to_index[kmer_hashes]
 
-    #log_memory_usage_now("starting for loop cython")
     for i in range(kmers.shape[0]):
         kmerhash = kmers[i] % modulo  # kmer_hashes[i]
         n_local_hits = n_kmers[kmerhash]

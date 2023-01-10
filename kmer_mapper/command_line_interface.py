@@ -123,6 +123,8 @@ def map_bnp(args):
             node_counts = kmer_index.get_node_counts()
             logging.info("Time spent getting node counts in the end: %.3f" % (time.perf_counter()-t))
 
+    if args.output_file is None:
+        return node_counts
 
     np.save(args.output_file, node_counts)
     logging.info("Saved node counts to %s.npy" % args.output_file)
