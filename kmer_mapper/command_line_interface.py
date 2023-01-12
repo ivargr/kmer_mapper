@@ -6,7 +6,7 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s %
 import os
 import time
 import tqdm
-from .util import _get_kmer_index_from_args, get_kmer_hashes_from_chunk_sequence, open_file
+from .util import _get_kmer_index_from_args, get_kmer_hashes_from_chunk_sequence, open_file, log_memory_usage_now
 import numpy as np
 import warnings
 warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning) 
@@ -37,6 +37,7 @@ def map_cpu(args, kmer_index, chunk_sequence_name):
     chunk_sequence = object_from_shared_memory(chunk_sequence_name).get_data().sequence
     logging.debug("N sequences in chunk: %d" % len(chunk_sequence))
     hashes = get_kmer_hashes_from_chunk_sequence(chunk_sequence, kmer_size)
+    remove_shared_memory(chunk_sequence_name)  # removev now to save some memory usage
 
     t0 = time.perf_counter()
     if isinstance(kmer_index, CounterKmerIndex):
@@ -48,7 +49,6 @@ def map_cpu(args, kmer_index, chunk_sequence_name):
 
     logging.debug("Mapping %d hashes took %.3f sec" % (len(hashes), time.perf_counter()-t0))
 
-    remove_shared_memory(chunk_sequence_name)
     logging.debug("Chunk of %d reads took %.2f sec" % (len(chunk_sequence), time.perf_counter()-t))
     return mapped
 
@@ -146,7 +146,7 @@ def run_argument_parser(args):
     subparser.add_argument("-f", "--reads", required=True, help="Reads in .fa, .fq, .fa.gz, or fq.gz format")
     subparser.add_argument("-k", "--kmer-size", required=False, default=31, type=int)
     subparser.add_argument("-t", "--n-threads", required=False, default=16, type=int)
-    subparser.add_argument("-c", "--chunk-size", required=False, type=int, default=100000000,
+    subparser.add_argument("-c", "--chunk-size", required=False, type=int, default=2500000,
                            help="N bytes to process in each chunk")
     subparser.add_argument("-o", "--output-file", required=True)
     subparser.add_argument("-d", "--debug", required=False, help="Set to True to print debug log")
