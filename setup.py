@@ -15,7 +15,7 @@ ext_modules=[
       ]
 
 setup(name='kmer_mapper',
-      version='0.0.28',
+      version='0.0.29',
       description='Kmer Mapper',
       url='http://github.com/ivargr/kmer_mapper',
       author='Ivar Grytten',

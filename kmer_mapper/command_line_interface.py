@@ -37,6 +37,7 @@ def map_cpu(args, kmer_index, chunk_sequence_name):
     chunk_sequence = object_from_shared_memory(chunk_sequence_name).get_data().sequence
     logging.debug("N sequences in chunk: %d" % len(chunk_sequence))
     hashes = get_kmer_hashes_from_chunk_sequence(chunk_sequence, kmer_size)
+    logging.debug("Removing %s" % chunk_sequence_name)
     remove_shared_memory(chunk_sequence_name)  # removev now to save some memory usage
 
     t0 = time.perf_counter()
@@ -101,7 +102,7 @@ def map_bnp(args):
         chunks = tqdm.tqdm(chunks, total=approx_number_of_chunks)
 
         if isinstance(kmer_index, KmerIndex):
-            initial_data = np.zeros(kmer_index.max_node_id()+1)
+            initial_data = np.zeros(kmer_index.max_node_id()+1, dtype=np.uint32)
         else:
             initial_data = np.zeros_like(kmer_index.counter._values)
 
