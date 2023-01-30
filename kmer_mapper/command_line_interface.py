@@ -54,12 +54,12 @@ def map_cpu(args, kmer_index, chunk_sequence_name):
     return mapped
 
 
-def map_gpu(index, chunks, k, map_reverse_complements=False):
+def map_gpu(index, chunks, k, hash_map_size, map_reverse_complements=False):
     """Maps a generator of chunks to the index (no shared memory)"""
     from .gpu_counter import GpuCounter
     logging.info("Making counter")
     counter = GpuCounter.from_kmers_and_nodes(index._kmers, index._nodes, k)
-    counter.initialize_cuda(130000001)
+    counter.initialize_cuda(hash_map_size)
     logging.info("CUDA counter initialized")
 
     t_start = time.perf_counter()
@@ -93,7 +93,7 @@ def map_bnp(args):
         bnp.set_backend(cp)
         file = open_file(args.reads)
         chunks = file.read_chunks(min_chunk_size=args.chunk_size)
-        node_counts = map_gpu(kmer_index, chunks, k, args.map_reverse_complements)
+        node_counts = map_gpu(kmer_index, chunks, k, args.gpu_hash_map_size, args.map_reverse_complements)
     else:
         assert not args.map_reverse_complements, "Mapping reverse complements only supported with GPU-mode for now"
         file = open_file(args.reads)
@@ -156,6 +156,8 @@ def run_argument_parser(args):
     subparser.add_argument("-g", "--gpu", default=False, type=bool,
                            help="Set to True to use GPU-counting. Experimental."
                            " Requires suitable hardware and dependencies.")
+    subparser.add_argument("-s", "--gpu-hash-map-size", default=0, type=int, help="Can be overriden to set GPU hash map size. "
+                           "Set to a lower number to decrease GPU memory requirements. Higher number makes things faster")
     subparser.add_argument("-r", "--map-reverse-complements", default=False, type=bool,
                             help="Also count kmers in reverse complement of reads. "
                                  "Default False. Not necessary if index contains reverse complements.")
