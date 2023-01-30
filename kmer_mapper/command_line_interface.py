@@ -66,11 +66,11 @@ def map_gpu(index, chunks, k, hash_map_size, map_reverse_complements=False):
     for i, chunk in enumerate(chunks):
         t0 = time.perf_counter()
         hashes = get_kmer_hashes_from_chunk_sequence(chunk.get_data().sequence, k)
-        logging.info("Time to get hashes for chunk: %.5f", (time.perf_counter()-t0))
+        logging.debug("Time to get hashes for chunk: %.5f", (time.perf_counter()-t0))
         t1 = time.perf_counter()
         counter.count(hashes, count_revcomps=map_reverse_complements)
-        logging.info("Time to count %d hashes for chunk: %.10f" % (len(hashes), time.perf_counter()-t1))
-        logging.info("GPU: Whole chunk finished in %.5f sec", (time.perf_counter()-t0))
+        logging.debug("Time to count %d hashes for chunk: %.10f" % (len(hashes), time.perf_counter()-t1))
+        logging.debug("GPU: Whole chunk finished in %.5f sec", (time.perf_counter()-t0))
 
     logging.info("Time spent only on hashing and counting hashes: %.5f" % (time.perf_counter()-t_start))
     return counter.get_node_counts(min_nodes=index.max_node_id())
