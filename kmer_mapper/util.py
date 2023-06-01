@@ -48,7 +48,7 @@ def _get_kmer_index_from_args(args):
             logging.error("Either a kmer index (-i) or an index bundle (-b) needs to be specified")
             sys.exit(1)
         else:
-            kmer_index = IndexBundle.from_file(args.index_bundle).indexes["KmerIndex"]
+            kmer_index = IndexBundle.from_file(args.index_bundle).indexes["kmer_index"]
             kmer_index.convert_to_int32()
             kmer_index.remove_ref_offsets()  # not needed, will save us some memory
     else:

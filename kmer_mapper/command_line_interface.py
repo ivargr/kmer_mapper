@@ -82,9 +82,9 @@ def map_bnp(args):
         logging.getLogger().setLevel(logging.DEBUG)
 
     k = args.kmer_size
+    start_time = time.perf_counter()
     kmer_index = _get_kmer_index_from_args(args)
 
-    start_time = time.perf_counter()
     n_bytes = os.stat(args.reads).st_size
     approx_number_of_chunks = int(n_bytes / args.chunk_size)
 
