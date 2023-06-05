@@ -68,3 +68,60 @@ def map_kmers_to_graph_index(index, int max_node_id, np.uint64_t[::1] kmers, int
 
     logging.debug("Time spent looking up kmers in index: %.3f" % (time.perf_counter()-t))
     return node_counts
+
+
+
+@cython.nonecheck(False)
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+# returns an array of same size of kmers with True for kmers that are in index
+def in_graph_index(index,  np.uint64_t[::1] kmers, int max_index_lookup_frequency=1000):
+    t = time.perf_counter()
+    # index arrays
+    cdef np.int32_t[::1] hashes_to_index = index._hashes_to_index
+    #cdef np.ndarray[np.int32_t] hashes_to_index = index._hashes_to_index
+    cdef np.int32_t[::1] n_kmers = index._n_kmers
+    #cdef np.ndarray[np.uint32_t] n_kmers = index._n_kmers
+    cdef np.int32_t[::1] nodes = index._nodes
+    cdef np.uint64_t[::1] index_kmers = index._kmers
+    cdef np.uint16_t[::1] index_frequencies = index._frequencies
+    cdef unsigned long modulo = index._modulo
+
+    cdef int n_local_hits
+    cdef int index_position
+
+    cdef int i = 0
+    cdef int l = 0
+    cdef int j = 0
+    cdef np.ndarray[np.uint8_t] out= np.zeros(len(kmers), dtype=np.uint8)
+
+    t = time.perf_counter()
+    cdef int n_collisions = 0
+    cdef int n_kmers_mapped = 0
+    cdef int n_skipped_high_frequency = 0
+    cdef int n_no_index_hits = 0
+    cdef unsigned long kmerhash
+    t = time.perf_counter()
+
+
+    cdef unsigned short hit = False
+
+    for i in range(kmers.shape[0]):
+        hit = 0
+        kmerhash = kmers[i] % modulo  # kmer_hashes[i]
+        n_local_hits = n_kmers[kmerhash]
+        index_position = hashes_to_index[kmerhash]
+        l = index_position
+        for j in range(n_local_hits):
+            # Check that this entry actually matches the kmer, sometimes it will not due to collision
+            if index_kmers[l] != kmers[i]:
+                l += 1
+                continue
+            hit = True
+            break
+
+        out[i] = hit
+
+    logging.debug("Time spent looking up kmers in index: %.3f" % (time.perf_counter()-t))
+    return out
