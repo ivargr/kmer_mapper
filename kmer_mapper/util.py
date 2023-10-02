@@ -1,7 +1,7 @@
 import gzip
 import sys
 from pathlib import PurePath
-
+from isal import igzip
 import bionumpy as bnp
 import numpy as np
 #import numpy_indexed as npi
@@ -93,5 +93,5 @@ def open_file(filename):
         buffer_type = bnp.TwoLineFastaBuffer
         logging.info("Using buffer type TwoLineFastaBuffer")
 
-    open_func = gzip.open if path.suffixes[-1] == ".gz" else open
+    open_func = igzip.open if path.suffixes[-1] == ".gz" else open
     return bnp.io.parser.NumpyFileReader(open_func(filename, "rb"), buffer_type)

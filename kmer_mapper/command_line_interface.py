@@ -87,6 +87,8 @@ def map_bnp(args):
 
     n_bytes = os.stat(args.reads).st_size
     approx_number_of_chunks = int(n_bytes / args.chunk_size)
+    logging.info("N bytes of reads: %d" % n_bytes)
+    logging.info("Approx number of chunks of %d bytes: %d" % (args.chunk_size, approx_number_of_chunks))
 
     if args.gpu:
         import cupy as cp
