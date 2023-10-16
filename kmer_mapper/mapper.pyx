@@ -9,6 +9,8 @@ from graph_kmer_index.shared_mem import to_shared_memory, SingleSharedArray
 from kmer_mapper.util import log_memory_usage_now
 import gc
 from libc.stdlib cimport free
+from cython.parallel import prange
+
 
 @cython.nonecheck(False)
 @cython.cdivision(True)
@@ -91,9 +93,9 @@ def in_graph_index(index,  np.uint64_t[::1] kmers, int max_index_lookup_frequenc
     cdef int n_local_hits
     cdef int index_position
 
-    cdef int i = 0
-    cdef int l = 0
-    cdef int j = 0
+    cdef long i = 0
+    cdef long l = 0
+    cdef long j = 0
     cdef np.ndarray[np.uint8_t] out= np.zeros(len(kmers), dtype=np.uint8)
 
     t = time.perf_counter()
@@ -108,6 +110,7 @@ def in_graph_index(index,  np.uint64_t[::1] kmers, int max_index_lookup_frequenc
     cdef unsigned short hit = False
 
     for i in range(kmers.shape[0]):
+    #for i in prange(0, kmers.shape[0], num_threads=8, nogil=True):
         hit = 0
         kmerhash = kmers[i] % modulo  # kmer_hashes[i]
         n_local_hits = n_kmers[kmerhash]
