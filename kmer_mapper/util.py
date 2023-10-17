@@ -84,6 +84,7 @@ def open_file(filename):
 
     try:
         buffer_type = bnp.io.files._get_buffer_type(suffix)
+        logging.info("Using buffer type %s" % buffer_type)
     except RuntimeError:
         logging.error("Unsupported file suffix %s" % suffix)
         raise
@@ -93,5 +94,8 @@ def open_file(filename):
         buffer_type = bnp.TwoLineFastaBuffer
         logging.info("Using buffer type TwoLineFastaBuffer")
 
+    logging.info("Using igzip")
     open_func = igzip.open if path.suffixes[-1] == ".gz" else open
-    return bnp.io.parser.NumpyFileReader(open_func(filename, "rb"), buffer_type)
+    reader = bnp.io.parser.NumpyFileReader(open_func(filename, "rb"), buffer_type)
+    reader.set_prepend_mode()  # important for performance
+    return reader

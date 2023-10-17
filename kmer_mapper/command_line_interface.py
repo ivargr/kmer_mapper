@@ -86,6 +86,8 @@ def map_bnp(args):
     kmer_index = _get_kmer_index_from_args(args)
 
     n_bytes = os.stat(args.reads).st_size
+    if args.reads.endswith(".gz"):
+        n_bytes *= 6.5  # rough estimate for gzipped to give a progress
     approx_number_of_chunks = int(n_bytes / args.chunk_size)
     logging.info("N bytes of reads: %d" % n_bytes)
     logging.info("Approx number of chunks of %d bytes: %d" % (args.chunk_size, approx_number_of_chunks))
@@ -115,7 +117,8 @@ def map_bnp(args):
                                                          chunks,
                                                          initial_data,
                                                          (args_dict, kmer_index),
-                                                         n_threads=args.n_threads
+                                                         n_threads=args.n_threads,
+                                                         queue_size_factor=2.0
                                                          )
         logging.info("Time spent only on hashing and counting hashes: %.4f" % (time.perf_counter()-t_before_map))
 
