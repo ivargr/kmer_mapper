@@ -36,6 +36,8 @@ def map_cpu(args, kmer_index, chunk_sequence_name):
     t = time.perf_counter()
     chunk_sequence = object_from_shared_memory(chunk_sequence_name).get_data().sequence
     logging.debug("N sequences in chunk: %d" % len(chunk_sequence))
+    # Replace N's with A to "allow" reads with N. Assumes there are very few N in reads (which is usually true)
+    chunk_sequence[chunk_sequence == "N"] = "A"
     hashes = get_kmer_hashes_from_chunk_sequence(chunk_sequence, kmer_size)
     logging.debug("Removing %s" % chunk_sequence_name)
     remove_shared_memory(chunk_sequence_name)  # removev now to save some memory usage
@@ -135,7 +137,7 @@ def map_bnp(args):
     np.save(args.output_file, node_counts)
     logging.info("Saved node counts to %s.npy" % args.output_file)
     logging.info("Spent %.3f sec in total mapping kmers using %d threads" % (time.perf_counter()-start_time, args.n_threads))
-    remove_shared_memory_in_session()
+    #remove_shared_memory_in_session()  # not necessary, all memory is freed manually
 
 
 def run_argument_parser(args):
