@@ -39,7 +39,6 @@ def map_cpu(args, kmer_index, chunk_sequence_name):
     # Replace N's with A to "allow" reads with N. Assumes there are very few N in reads (which is usually true)
     chunk_sequence[chunk_sequence == "N"] = "A"
     hashes = get_kmer_hashes_from_chunk_sequence(chunk_sequence, kmer_size)
-    logging.debug("Removing %s" % chunk_sequence_name)
     remove_shared_memory(chunk_sequence_name)  # removev now to save some memory usage
 
     t0 = time.perf_counter()
