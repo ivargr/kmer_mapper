@@ -34,7 +34,8 @@ def map_cpu(args, kmer_index, chunk_sequence_name):
     kmer_size = args["kmer_size"]
     logging.debug("Starting _mapper with chunk %s" % chunk_sequence_name)
     t = time.perf_counter()
-    chunk_sequence = object_from_shared_memory(chunk_sequence_name).get_data().sequence
+    chunk_sequence = object_from_shared_memory(chunk_sequence_name)
+    #chunk_sequence = object_from_shared_memory(chunk_sequence_name).get_data().sequence
     logging.debug("N sequences in chunk: %d" % len(chunk_sequence))
     # Replace N's with A to "allow" reads with N. Assumes there are very few N in reads (which is usually true)
     chunk_sequence[chunk_sequence == "N"] = "A"
@@ -66,7 +67,8 @@ def map_gpu(index, chunks, k, hash_map_size, map_reverse_complements=False):
     t_start = time.perf_counter()
     for i, chunk in enumerate(chunks):
         t0 = time.perf_counter()
-        hashes = get_kmer_hashes_from_chunk_sequence(chunk.get_data().sequence, k)
+        #hashes = get_kmer_hashes_from_chunk_sequence(chunk.get_data().sequence, k)
+        hashes = get_kmer_hashes_from_chunk_sequence(chunk.sequence, k)
         logging.debug("Time to get hashes for chunk: %.5f", (time.perf_counter()-t0))
         t1 = time.perf_counter()
         counter.count(hashes, count_revcomps=map_reverse_complements)
@@ -96,14 +98,19 @@ def map_bnp(args):
     if args.gpu:
         import cupy as cp
         bnp.set_backend(cp)
-        file = open_file(args.reads)
+        #file = open_file(args.reads)
+        file = bnp.open(args.reads)
         chunks = file.read_chunks(min_chunk_size=args.chunk_size)
         node_counts = map_gpu(kmer_index, chunks, k, args.gpu_hash_map_size, args.map_reverse_complements)
     else:
+        import numpy as np
         assert not args.map_reverse_complements, "Mapping reverse complements only supported with GPU-mode for now"
-        file = open_file(args.reads)
-        chunks = (object_to_shared_memory(raw_chunk) for
+        #file = open_file(args.reads)
+        file = bnp.open(args.reads)
+        chunks = (object_to_shared_memory(raw_chunk.sequence) for
                   raw_chunk in file.read_chunks(min_chunk_size=args.chunk_size))
+        #chunks = (object_to_shared_memory(raw_chunk) for
+        #          raw_chunk in file.read_chunks(min_chunk_size=args.chunk_size))
         chunks = tqdm.tqdm(chunks, total=approx_number_of_chunks)
 
         if isinstance(kmer_index, KmerIndex):
@@ -129,6 +136,12 @@ def map_bnp(args):
             kmer_index.counter._values = node_counts
             node_counts = kmer_index.get_node_counts()
             logging.info("Time spent getting node counts in the end: %.3f" % (time.perf_counter()-t))
+
+
+    if args.gpu:
+        # set backend back to np
+        import numpy as np
+        bnp.set_backend(np)
 
     if args.output_file is None:
         return node_counts
